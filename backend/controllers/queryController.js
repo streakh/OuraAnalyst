@@ -11,6 +11,6 @@ exports.processQuery = async (req, res) => {
     res.json({ response });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Error processing query' });
+    res.status(500).json({ error: 'Error processing query', details: error.message});
   }
 };

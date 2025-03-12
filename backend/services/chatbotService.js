@@ -5,7 +5,7 @@ const config = require('../config');
 exports.generateInsight = async (query) => {
   try {
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [{ role: 'user', content: query }]
     }, {
       headers: {
