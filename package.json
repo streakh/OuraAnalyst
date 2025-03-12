@@ -1,0 +1,22 @@
+{
+  "name": "ourarag",
+  "version": "1.0.0",
+  "description": "Oura Data Query Chat",
+  "main": "index.js",
+  "scripts": {
+    "start": "node backend/app.js",
+    "dev": "nodemon backend/app.js"
+  },
+  "author": "Streak Honey",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.8.2",
+    "body-parser": "^1.20.3",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.12.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
