@@ -6,5 +6,6 @@ const dataController = require('../controllers/dataController');
 
 router.post('/query', queryController.processQuery);
 router.post('/update', dataController.updateOuraData);
+router.get('/test-oura', dataController.testOuraConnection);
 
 module.exports = router;
