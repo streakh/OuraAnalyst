@@ -2,10 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const queryController = require('../controllers/queryController');
-const dataController = require('../controllers/dataController');
 
+// Query route - single endpoint for all query types
 router.post('/query', queryController.processQuery);
-router.post('/update', dataController.updateOuraData);
-router.get('/test-oura', dataController.testOuraConnection);
 
 module.exports = router;
