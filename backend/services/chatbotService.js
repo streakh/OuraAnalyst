@@ -5,9 +5,12 @@ const ouraService = require('./ouraService');
 
 // Helper function to determine date range from query
 function parseDateRangeFromQuery(query) {
-  const endDate = new Date();
+  let endDate = new Date();
   let startDate = new Date();
   startDate.setDate(endDate.getDate() - 7); // Default to last 7 days
+  
+  // For debugging
+  console.log(`Current date: ${endDate.toISOString().split('T')[0]}`);
   
   // Check if the query mentions specific time periods
   const timeRegex = {
@@ -28,9 +31,17 @@ function parseDateRangeFromQuery(query) {
   
   // Adjust date range based on query
   if (timeRegex.yesterday.test(query)) {
-    startDate = new Date();
-    startDate.setDate(endDate.getDate() - 1);
-    endDate = new Date(startDate); // Set end date to same as start for "yesterday"
+    // Create a new date for yesterday
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0); // Set to beginning of day
+    
+    // Set both start and end date to yesterday
+    startDate = yesterday;
+    endDate = new Date(yesterday);
+    endDate.setHours(23, 59, 59, 999); // Set to end of day
+    
+    console.log(`Yesterday query detected. Setting date to: ${startDate.toISOString().split('T')[0]}`);
   } else if (timeRegex.lastWeek.test(query)) {
     startDate.setDate(endDate.getDate() - 7);
   } else if (timeRegex.lastMonth.test(query)) {
@@ -271,8 +282,42 @@ exports.generateInsight = async (query) => {
       queryType = 'recommendation';
     }
     
+    // Check if this is a "yesterday" query
+    const isYesterdayQuery = /yesterday|last night|yesterday night|day before/i.test(query);
+    
     // Parse date range from the query
-    const { startDate, endDate } = parseDateRangeFromQuery(query);
+    let { startDate, endDate } = parseDateRangeFromQuery(query);
+    
+    // If this is a "yesterday" query, let's check if we have data for the most recent date
+    if (isYesterdayQuery) {
+      const mostRecentData = await ouraService.getMostRecentDataDate();
+      
+      if (mostRecentData) {
+        const mostRecentDate = new Date(mostRecentData);
+        const formattedDate = mostRecentDate.toISOString().split('T')[0];
+        const yesterdayDate = startDate.toISOString().split('T')[0];
+        
+        console.log(`Yesterday query detected. Yesterday date: ${yesterdayDate}, Most recent data date: ${formattedDate}`);
+        
+        // Always use the most recent data date for "yesterday" queries
+        console.log(`Using most recent date (${formattedDate}) for yesterday query`);
+        
+        // Create new dates for the most recent data
+        const newStartDate = new Date(mostRecentDate);
+        newStartDate.setHours(0, 0, 0, 0);
+        const newEndDate = new Date(mostRecentDate);
+        newEndDate.setHours(23, 59, 59, 999);
+        
+        // Use the most recent date instead
+        startDate = newStartDate;
+        endDate = newEndDate;
+        
+        // If the dates don't match, update the query to reflect the date we're actually using
+        if (formattedDate !== yesterdayDate) {
+          query = query.replace(/yesterday|last night/i, `on ${formattedDate}`);
+        }
+      }
+    }
     
     // Determine appropriate limits based on the query and date range
     const { dbLimit, processingLimit } = determineDataLimits(query, startDate, endDate);
@@ -280,7 +325,7 @@ exports.generateInsight = async (query) => {
     console.log(`Query: "${query}" | Type: ${queryType} | Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} | Limits: DB=${dbLimit}, Processing=${processingLimit}`);
     
     // Fetch relevant Oura data based on the query type and date range
-    const ouraData = await ouraService.fetchDataForQuery(queryType, startDate, endDate, dbLimit);
+    let ouraData = await ouraService.fetchDataForQuery(queryType, startDate, endDate, dbLimit);
     
     // If no data is found, return a helpful message
     if (!ouraData || 
@@ -288,6 +333,17 @@ exports.generateInsight = async (query) => {
         (ouraData.sleep && ouraData.sleep.length === 0 && 
          ouraData.activity && ouraData.activity.length === 0 && 
          ouraData.readiness && ouraData.readiness.length === 0)) {
+      
+      // Get the most recent data date
+      const mostRecentData = await ouraService.getMostRecentDataDate();
+      
+      if (mostRecentData) {
+        const mostRecentDate = new Date(mostRecentData);
+        const formattedDate = mostRecentDate.toISOString().split('T')[0];
+        
+        return `I couldn't find any Oura data for the specified time period. The most recent data available is from ${formattedDate}. Try asking about that date instead, for example: "What was my sleep score on ${formattedDate}?"`;
+      }
+      
       return "I couldn't find any Oura data for the specified time period. Please try a different query or make sure your Oura data is up to date.";
     }
     
@@ -305,8 +361,9 @@ exports.generateInsight = async (query) => {
       
       Please analyze the data provided and give thoughtful, personalized insights and recommendations.
       If the user asks about data that's not available, kindly let them know and suggest what data they could ask about instead.
-      Always be helpful, concise, and focus on actionable advice based on the data.
-      Format your response in a clear, readable way using markdown formatting where appropriate.`
+      Always be helpful, concise, and focus on actionable advice based on the data. 
+      Format your response in a clear, readable way using markdown formatting where appropriate.
+      Ensure your response is concise and directly addresses the user's query, while still providing all the necessary information.`
     };
     
     // Prepare a context message with the relevant data

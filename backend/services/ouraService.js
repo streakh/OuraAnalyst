@@ -63,6 +63,16 @@ class OuraApiClient {
   }
 
   /**
+   * Fetch daily sleep data from the Oura API (for sleep scores)
+   * @param {number} days - Number of days to fetch
+   * @returns {Promise<Object>} - Daily sleep data with sleep scores
+   */
+  async fetchDailySleepData(days = 30) {
+    const params = this.getDateRange(days);
+    return this.makeRequest('daily_sleep', params);
+  }
+
+  /**
    * Fetch activity data from the Oura API
    * @param {number} days - Number of days to fetch
    * @returns {Promise<Object>} - Activity data
@@ -93,14 +103,16 @@ exports.fetchLatestOuraData = async (days = 30) => {
     const client = new OuraApiClient(config.ouraApiKey);
     
     // Fetch all data types in parallel
-    const [sleepData, activityData, readinessData] = await Promise.all([
+    const [sleepData, dailySleepData, activityData, readinessData] = await Promise.all([
       client.fetchSleepData(days),
+      client.fetchDailySleepData(days),
       client.fetchActivityData(days),
       client.fetchReadinessData(days)
     ]);
     
     return {
       sleep: sleepData,
+      dailySleep: dailySleepData,
       activity: activityData,
       readiness: readinessData
     };
@@ -113,9 +125,10 @@ exports.fetchLatestOuraData = async (days = 30) => {
 /**
  * Store sleep data in the database
  * @param {Object} data - Sleep data from Oura API
+ * @param {Object} dailySleepData - Daily sleep data with sleep scores
  * @returns {Promise<Array>} - Saved records
  */
-async function storeSleepData(data) {
+async function storeSleepData(data, dailySleepData) {
   if (!data || !data.data) {
     console.warn('No sleep data to store');
     return [];
@@ -123,14 +136,31 @@ async function storeSleepData(data) {
 
   const savedRecords = [];
   
+  // Create a map of daily sleep scores by date for quick lookup
+  const sleepScoresByDate = {};
+  if (dailySleepData && dailySleepData.data) {
+    for (const dailySleep of dailySleepData.data) {
+      sleepScoresByDate[dailySleep.day] = dailySleep.score;
+    }
+  }
+  
   for (const sleep of data.data) {
+    // Get the sleep score from the daily sleep data if available
+    const sleepScore = sleepScoresByDate[sleep.day] || null;
+    
+    if (sleepScore) {
+      console.log(`Found sleep score ${sleepScore} for date ${sleep.day}`);
+    } else {
+      console.log(`No sleep score found for date ${sleep.day}`);
+    }
+    
     // Create a data object with relevant sleep metrics
     const sleepRecord = {
       id: sleep.id,
       day: new Date(sleep.day),
       bedtime_start: sleep.bedtime_start,
       bedtime_end: sleep.bedtime_end,
-      sleep_score: sleep.sleep_score,
+      sleep_score: sleepScore, // Use the sleep score from daily sleep data
       total_sleep_duration: sleep.total_sleep_duration,
       deep_sleep_duration: sleep.deep_sleep_duration,
       rem_sleep_duration: sleep.rem_sleep_duration,
@@ -274,7 +304,7 @@ exports.storeData = async (data) => {
 
     // Store each data type in parallel
     const [sleepRecords, activityRecords, readinessRecords] = await Promise.all([
-      storeSleepData(data.sleep),
+      storeSleepData(data.sleep, data.dailySleep),
       storeActivityData(data.activity),
       storeReadinessData(data.readiness)
     ]);
@@ -359,5 +389,40 @@ exports.fetchDataForQuery = async (queryType, startDate, endDate, limit = 14) =>
   } catch (error) {
     console.error(`Error fetching data for query type ${queryType}:`, error);
     throw error;
+  }
+};
+
+/**
+ * Get the most recent date for which we have data
+ * @returns {Promise<string|null>} - The most recent date in ISO format, or null if no data
+ */
+exports.getMostRecentDataDate = async () => {
+  try {
+    // Try to get the most recent sleep data
+    const mostRecentSleep = await SleepData.findOne().sort({ day: -1 }).lean();
+    
+    if (mostRecentSleep && mostRecentSleep.day) {
+      return mostRecentSleep.day;
+    }
+    
+    // If no sleep data, try activity data
+    const mostRecentActivity = await ActivityData.findOne().sort({ day: -1 }).lean();
+    
+    if (mostRecentActivity && mostRecentActivity.day) {
+      return mostRecentActivity.day;
+    }
+    
+    // If no activity data, try readiness data
+    const mostRecentReadiness = await ReadinessData.findOne().sort({ day: -1 }).lean();
+    
+    if (mostRecentReadiness && mostRecentReadiness.day) {
+      return mostRecentReadiness.day;
+    }
+    
+    // No data found
+    return null;
+  } catch (error) {
+    console.error('Error getting most recent data date:', error);
+    return null;
   }
 };
