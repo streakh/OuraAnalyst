@@ -118,9 +118,6 @@ Use the web interface to ask questions about your data, such as:
 - "What's my readiness trend?"
 - "Give me recommendations to improve my sleep based on my data."
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 

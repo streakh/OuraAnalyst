@@ -160,7 +160,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 async function makeOpenAIRequest(messages, retries = 3, backoff = 1000) {
   try {
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       messages,
       temperature: 0.7,
       max_tokens: 1000

@@ -9,6 +9,10 @@ const config = require('./config');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Note: We're using a time-based update approach
+// Data will be updated on the first query after server start
+// and then again if more than 1 hour has passed since the last update
+
 app.use(bodyParser.json());
 
 // API routes

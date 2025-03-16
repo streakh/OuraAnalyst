@@ -1,6 +1,49 @@
 // backend/controllers/queryController.js
 const chatbotService = require('../services/chatbotService');
+const ouraService = require('../services/ouraService');
 // const analyticsService = require('../services/analyticsService'); // Uncomment if you integrate analytics later
+
+// Track when we last updated the data
+let lastUpdateTime = null;
+const UPDATE_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+
+/**
+ * Update Oura data if this is the first query of the session or if the update interval has passed
+ * @returns {Promise<Object>} - Update result or null if no update was performed
+ */
+async function updateOuraDataIfNeeded() {
+  const currentTime = Date.now();
+  
+  // Update if this is the first query ever or if the update interval has passed
+  if (lastUpdateTime === null || (currentTime - lastUpdateTime > UPDATE_INTERVAL)) {
+    const reason = lastUpdateTime === null ? 'First query detected' : 'Session timeout (1 hour) exceeded';
+    console.log(`${reason}. Updating Oura data...`);
+    
+    try {
+      // Fetch the latest data from the Oura API
+      const data = await ouraService.fetchLatestOuraData();
+      
+      // Store the data in the database
+      const result = await ouraService.storeData(data);
+      
+      // Update the last update time
+      lastUpdateTime = currentTime;
+      
+      console.log(`Data update completed: ${result.totalCount} records updated`);
+      console.log(`Next update will occur after: ${new Date(currentTime + UPDATE_INTERVAL).toLocaleString()}`);
+      
+      return result;
+    } catch (error) {
+      console.error('Error in data update:', error);
+      // Still update the time to prevent repeated failures
+      lastUpdateTime = currentTime;
+      return null;
+    }
+  }
+  
+  // If we're here, no update was needed
+  return null;
+}
 
 /**
  * Automatically detect the query type based on keywords in the query
@@ -22,6 +65,10 @@ function detectQueryType(query) {
 
 exports.processQuery = async (req, res) => {
   try {
+    // Update Oura data if needed based on time interval
+    const updateResult = await updateOuraDataIfNeeded();
+    const wasUpdated = updateResult !== null;
+    
     const { query, queryType: explicitType } = req.body;
     
     // Use explicit type if provided, otherwise detect it
@@ -39,7 +86,9 @@ exports.processQuery = async (req, res) => {
       metadata: {
         queryType,
         processedAt: new Date().toISOString(),
-        // You could add more metadata here if needed
+        dataUpdated: wasUpdated,
+        lastDataUpdate: lastUpdateTime ? new Date(lastUpdateTime).toISOString() : null,
+        nextScheduledUpdate: lastUpdateTime ? new Date(lastUpdateTime + UPDATE_INTERVAL).toISOString() : null
       }
     });
   } catch (error) {

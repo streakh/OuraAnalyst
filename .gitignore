@@ -21,3 +21,6 @@ Thumbs.db
 # Build output directories (if applicable)
 dist/
 build/
+
+# oura api json file
+oura-openapi-1.24.json
