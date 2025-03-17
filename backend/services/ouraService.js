@@ -329,7 +329,7 @@ exports.storeData = async (data) => {
  * @param {number} limit - Maximum number of records to return
  * @returns {Promise<Array>} - Data for the query
  */
-exports.fetchDataForQuery = async (queryType, startDate, endDate, limit = 14) => {
+exports.fetchDataForQuery = async (queryType, startDate, endDate, limit = 100) => {
   try {
     let data = [];
     

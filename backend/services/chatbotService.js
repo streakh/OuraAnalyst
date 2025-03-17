@@ -111,46 +111,38 @@ function determineDataLimits(query, startDate, endDate) {
   // Calculate the date range in days
   const dayDifference = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
   
-  // Set higher database and processing limits
-  let dbLimit = 60; // Increased from 14
-  let processingLimit = 30; // Increased from 7
+  // Set database limit based on query context
+  let dbLimit = 60; // Default limit
   
   if (dayDifference <= 1) {
     // For single day queries (like "yesterday")
-    dbLimit = 10; // Increased from 3
-    processingLimit = 10; // Increased from 3
+    dbLimit = 10;
   } else if (dayDifference <= 7) {
     // For week-long queries
-    dbLimit = 30; // Increased from 10
-    processingLimit = 20; // Increased from 7
+    dbLimit = 30;
   } else if (dayDifference <= 14) {
     // For two-week queries
-    dbLimit = 40; // Increased from 20
-    processingLimit = 30; // Increased from 14
+    dbLimit = 40;
   } else {
     // For longer queries (up to a month)
-    dbLimit = 60; // Increased from 30
-    processingLimit = 40; // Increased from 20
+    dbLimit = 60;
   }
   
   // Check for specific query patterns that might need more data
   if (/trend|pattern|compare|correlation|over time/i.test(query)) {
     // Trend analysis needs more data points
     dbLimit = Math.max(dbLimit, dayDifference * 2);
-    processingLimit = Math.max(processingLimit, dayDifference);
   }
   
   if (/average|mean|median|typical/i.test(query)) {
     // Statistical queries benefit from more data
     dbLimit = Math.max(dbLimit, dayDifference * 2);
-    processingLimit = Math.max(processingLimit, dayDifference);
   }
   
-  // Remove the caps to allow more data when needed
-  // dbLimit = Math.min(dbLimit, 30);
-  // processingLimit = Math.min(processingLimit, 30);
+  // Cap the limit at 100 to prevent excessive data retrieval
+  dbLimit = Math.min(dbLimit, 100);
   
-  return { dbLimit, processingLimit };
+  return dbLimit;
 }
 
 // Helper function to delay execution
@@ -185,9 +177,9 @@ async function makeOpenAIRequest(messages, retries = 3, backoff = 1000) {
 }
 
 // Helper function to simplify data without limiting records
-function simplifyData(data, maxRecords = 100) {
+function simplifyData(data) {
   if (Array.isArray(data)) {
-    // Process all records without slicing
+    // Process all records without slicing or limiting
     return data.map(record => {
       // Extract all fields from the schemas
       const { 
@@ -294,9 +286,9 @@ function simplifyData(data, maxRecords = 100) {
   } else {
     // Handle object with multiple data types
     return {
-      sleep: data.sleep ? simplifyData(data.sleep, maxRecords) : [],
-      activity: data.activity ? simplifyData(data.activity, maxRecords) : [],
-      readiness: data.readiness ? simplifyData(data.readiness, maxRecords) : []
+      sleep: data.sleep ? simplifyData(data.sleep) : [],
+      activity: data.activity ? simplifyData(data.activity) : [],
+      readiness: data.readiness ? simplifyData(data.readiness) : []
     };
   }
 }
@@ -368,9 +360,9 @@ exports.generateInsight = async (query) => {
     }
     
     // Determine appropriate limits based on the query and date range
-    const { dbLimit, processingLimit } = determineDataLimits(query, startDate, endDate);
+    const dbLimit = determineDataLimits(query, startDate, endDate);
     
-    console.log(`Query: "${query}" | Type: ${queryType} | Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} | Limits: DB=${dbLimit}, Processing=${processingLimit}`);
+    console.log(`Query: "${query}" | Type: ${queryType} | Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} | Limits: DB=${dbLimit}`);
     
     // Fetch relevant Oura data based on the query type and date range
     let ouraData = await ouraService.fetchDataForQuery(queryType, startDate, endDate, dbLimit);
@@ -396,7 +388,7 @@ exports.generateInsight = async (query) => {
     }
     
     // Simplify and limit the data to avoid token limits
-    const simplifiedData = simplifyData(ouraData, processingLimit);
+    const simplifiedData = simplifyData(ouraData);
     
     // Prepare a system message that explains what data is available
     const systemMessage = {
