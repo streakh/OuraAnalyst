@@ -270,15 +270,30 @@ function simplifyData(data, maxRecords = 7) {
 
 exports.generateInsight = async (query) => {
   try {
-    // Determine the query type to fetch appropriate data
+    // Check for keywords related to each data type
+    const hasSleepKeywords = /sleep|slept|bed|dream|nap|snore|insomnia|rem|deep sleep|light sleep/i.test(query);
+    const hasActivityKeywords = /activity|exercise|walk|run|steps|move|workout|active|calories|training/i.test(query);
+    const hasReadinessKeywords = /ready|readiness|recovery|prepared|recover|rested|energy/i.test(query);
+    const hasRecommendationKeywords = /recommend|suggest|advice|improve|better|enhance|tips|help me|should i|how can i/i.test(query);
+    
+    // Determine query type based on keyword combinations
     let queryType = 'general';
-    if (/sleep|slept|bed|dream|nap|snore|insomnia|rem|deep sleep|light sleep/i.test(query)) {
+    
+    // If query contains keywords from multiple categories, use 'general'
+    if ((hasSleepKeywords && hasActivityKeywords) || 
+        (hasSleepKeywords && hasReadinessKeywords) || 
+        (hasActivityKeywords && hasReadinessKeywords)) {
+      queryType = 'general';
+      console.log('Mixed query detected with multiple data types. Using general query type.');
+    }
+    // Otherwise, use the specific category
+    else if (hasSleepKeywords) {
       queryType = 'sleep';
-    } else if (/activity|exercise|walk|run|steps|move|workout|active|calories|training/i.test(query)) {
+    } else if (hasActivityKeywords) {
       queryType = 'activity';
-    } else if (/ready|readiness|recovery|prepared|recover|rested|energy/i.test(query)) {
+    } else if (hasReadinessKeywords) {
       queryType = 'readiness';
-    } else if (/recommend|suggest|advice|improve|better|enhance|tips|help me|should i|how can i/i.test(query)) {
+    } else if (hasRecommendationKeywords) {
       queryType = 'recommendation';
     }
     
