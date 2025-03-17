@@ -1,7 +1,7 @@
 // backend/controllers/queryController.js
 const chatbotService = require('../services/chatbotService');
 const ouraService = require('../services/ouraService');
-// const analyticsService = require('../services/analyticsService'); // Uncomment if you integrate analytics later
+// const analyticsService = require('../services/analyticsService'); // Uncomment if I integrate analytics later
 
 // Track when we last updated the data
 let lastUpdateTime = null;
@@ -11,7 +11,7 @@ const UPDATE_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
  * Update Oura data if this is the first query of the session or if the update interval has passed
  * @returns {Promise<Object>} - Update result or null if no update was performed
  */
-async function updateOuraDataIfNeeded() {
+async function dataUpdateCheck() {
   const currentTime = Date.now();
   
   // Update if this is the first query ever or if the update interval has passed
@@ -66,7 +66,7 @@ function detectQueryType(query) {
 exports.processQuery = async (req, res) => {
   try {
     // Update Oura data if needed based on time interval
-    const updateResult = await updateOuraDataIfNeeded();
+    const updateResult = await dataUpdateCheck();
     const wasUpdated = updateResult !== null;
     
     const { query, queryType: explicitType } = req.body;

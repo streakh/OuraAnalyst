@@ -189,24 +189,32 @@ function simplifyData(data, maxRecords = 100) {
   if (Array.isArray(data)) {
     // Process all records without slicing
     return data.map(record => {
-      // Extract only the most important fields
+      // Extract all fields from the schemas
       const { 
         id, day, 
         // Sleep specific
-        sleep_score, total_sleep_duration, deep_sleep_duration, rem_sleep_duration, 
-        light_sleep_duration, awake_time, latency, efficiency, restless_periods,
-        average_heart_rate, lowest_heart_rate, average_hrv, temperature_deviation,
+        bedtime_start, bedtime_end, sleep_score, total_sleep_duration, deep_sleep_duration, 
+        rem_sleep_duration, light_sleep_duration, awake_time, latency, efficiency, 
+        restless_periods, average_heart_rate, lowest_heart_rate, average_hrv, 
+        temperature_deviation, readiness, heart_rate, hrv,
         // Activity specific
         activity_score, active_calories, steps, equivalent_walking_distance,
-        high_activity_time, medium_activity_time, low_activity_time, 
+        high_activity_time, medium_activity_time, low_activity_time, average_met_minutes,
+        high_activity_met_minutes, inactivity_alerts, low_activity_met_minutes,
+        medium_activity_met_minutes, meters_to_target, non_wear_time, resting_time,
+        sedentary_met_minutes, sedentary_time, target_calories, target_meters, total_calories,
         // Readiness specific
         score, activity_balance, body_temperature, hrv_balance, recovery_index,
-        resting_heart_rate, sleep_balance
+        resting_heart_rate, sleep_balance, previous_day_activity, previous_night,
+        temperature_trend_deviation
       } = record;
       
       return {
         date: day instanceof Date ? day.toISOString().split('T')[0] : day,
-        // Include fields conditionally based on what's available
+        // Include all fields conditionally based on what's available
+        // Sleep data
+        ...(bedtime_start !== undefined && { bedtime_start }),
+        ...(bedtime_end !== undefined && { bedtime_end }),
         ...(sleep_score !== undefined && { sleep_score }),
         ...(total_sleep_duration !== undefined && { 
           total_sleep_duration: Math.round(total_sleep_duration / 60) + " minutes" 
@@ -230,6 +238,9 @@ function simplifyData(data, maxRecords = 100) {
         ...(lowest_heart_rate !== undefined && { lowest_heart_rate }),
         ...(average_hrv !== undefined && { average_hrv }),
         ...(temperature_deviation !== undefined && { temperature_deviation }),
+        ...(readiness !== undefined && { readiness }),
+        ...(heart_rate !== undefined && { heart_rate }),
+        ...(hrv !== undefined && { hrv }),
         
         // Activity data
         ...(activity_score !== undefined && { activity_score }),
@@ -247,6 +258,25 @@ function simplifyData(data, maxRecords = 100) {
         ...(low_activity_time !== undefined && { 
           low_activity_time: Math.round(low_activity_time / 60) + " minutes" 
         }),
+        ...(average_met_minutes !== undefined && { average_met_minutes }),
+        ...(high_activity_met_minutes !== undefined && { high_activity_met_minutes }),
+        ...(inactivity_alerts !== undefined && { inactivity_alerts }),
+        ...(low_activity_met_minutes !== undefined && { low_activity_met_minutes }),
+        ...(medium_activity_met_minutes !== undefined && { medium_activity_met_minutes }),
+        ...(meters_to_target !== undefined && { meters_to_target }),
+        ...(non_wear_time !== undefined && { 
+          non_wear_time: Math.round(non_wear_time / 60) + " minutes" 
+        }),
+        ...(resting_time !== undefined && { 
+          resting_time: Math.round(resting_time / 60) + " minutes" 
+        }),
+        ...(sedentary_met_minutes !== undefined && { sedentary_met_minutes }),
+        ...(sedentary_time !== undefined && { 
+          sedentary_time: Math.round(sedentary_time / 60) + " minutes" 
+        }),
+        ...(target_calories !== undefined && { target_calories }),
+        ...(target_meters !== undefined && { target_meters }),
+        ...(total_calories !== undefined && { total_calories }),
         
         // Readiness data
         ...(score !== undefined && { readiness_score: score }),
@@ -255,7 +285,10 @@ function simplifyData(data, maxRecords = 100) {
         ...(hrv_balance !== undefined && { hrv_balance }),
         ...(recovery_index !== undefined && { recovery_index }),
         ...(resting_heart_rate !== undefined && { resting_heart_rate }),
-        ...(sleep_balance !== undefined && { sleep_balance })
+        ...(sleep_balance !== undefined && { sleep_balance }),
+        ...(previous_day_activity !== undefined && { previous_day_activity }),
+        ...(previous_night !== undefined && { previous_night }),
+        ...(temperature_trend_deviation !== undefined && { temperature_trend_deviation })
       };
     });
   } else {
@@ -273,7 +306,7 @@ exports.generateInsight = async (query) => {
     // Check for keywords related to each data type
     const hasSleepKeywords = /sleep|slept|bed|dream|nap|snore|insomnia|rem|deep sleep|light sleep/i.test(query);
     const hasActivityKeywords = /activity|exercise|walk|run|steps|move|workout|active|calories|training/i.test(query);
-    const hasReadinessKeywords = /ready|readiness|recovery|prepared|recover|rested|energy/i.test(query);
+    const hasReadinessKeywords = /ready|readiness|recovery|prepared|recover|rested|energy|temperature|temp/i.test(query);
     const hasRecommendationKeywords = /recommend|suggest|advice|improve|better|enhance|tips|help me|should i|how can i/i.test(query);
     
     // Determine query type based on keyword combinations
