@@ -111,44 +111,44 @@ function determineDataLimits(query, startDate, endDate) {
   // Calculate the date range in days
   const dayDifference = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
   
-  // Set database and processing limits based on the date range
-  let dbLimit = 14; // Default database limit
-  let processingLimit = 7; // Default processing limit
+  // Set higher database and processing limits
+  let dbLimit = 60; // Increased from 14
+  let processingLimit = 30; // Increased from 7
   
   if (dayDifference <= 1) {
     // For single day queries (like "yesterday")
-    dbLimit = 3;
-    processingLimit = 3;
+    dbLimit = 10; // Increased from 3
+    processingLimit = 10; // Increased from 3
   } else if (dayDifference <= 7) {
     // For week-long queries
-    dbLimit = 10;
-    processingLimit = 7;
+    dbLimit = 30; // Increased from 10
+    processingLimit = 20; // Increased from 7
   } else if (dayDifference <= 14) {
     // For two-week queries
-    dbLimit = 20;
-    processingLimit = 14;
+    dbLimit = 40; // Increased from 20
+    processingLimit = 30; // Increased from 14
   } else {
     // For longer queries (up to a month)
-    dbLimit = 30;
-    processingLimit = 20;
+    dbLimit = 60; // Increased from 30
+    processingLimit = 40; // Increased from 20
   }
   
   // Check for specific query patterns that might need more data
   if (/trend|pattern|compare|correlation|over time/i.test(query)) {
     // Trend analysis needs more data points
-    dbLimit = Math.max(dbLimit, dayDifference);
+    dbLimit = Math.max(dbLimit, dayDifference * 2);
     processingLimit = Math.max(processingLimit, dayDifference);
   }
   
   if (/average|mean|median|typical/i.test(query)) {
     // Statistical queries benefit from more data
-    dbLimit = Math.max(dbLimit, dayDifference);
+    dbLimit = Math.max(dbLimit, dayDifference * 2);
     processingLimit = Math.max(processingLimit, dayDifference);
   }
   
-  // Cap at maximum values to prevent excessive data
-  dbLimit = Math.min(dbLimit, 30);
-  processingLimit = Math.min(processingLimit, 30);
+  // Remove the caps to allow more data when needed
+  // dbLimit = Math.min(dbLimit, 30);
+  // processingLimit = Math.min(processingLimit, 30);
   
   return { dbLimit, processingLimit };
 }
@@ -163,7 +163,7 @@ async function makeOpenAIRequest(messages, retries = 3, backoff = 1000) {
       model: 'gpt-4o-mini',
       messages,
       temperature: 0.7,
-      max_tokens: 1000
+      max_tokens: 2000
     }, {
       headers: {
         'Authorization': `Bearer ${config.chatGPTKey}`,
@@ -184,11 +184,11 @@ async function makeOpenAIRequest(messages, retries = 3, backoff = 1000) {
   }
 }
 
-// Helper function to simplify and limit data
-function simplifyData(data, maxRecords = 7) {
+// Helper function to simplify data without limiting records
+function simplifyData(data, maxRecords = 100) {
   if (Array.isArray(data)) {
-    // Limit to maxRecords and simplify each record
-    return data.slice(0, maxRecords).map(record => {
+    // Process all records without slicing
+    return data.map(record => {
       // Extract only the most important fields
       const { 
         id, day, 
