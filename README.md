@@ -50,7 +50,7 @@ OuraRAG is a web application that allows you to query your Oura Ring data using 
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/ourarag.git
+   git clone https://github.com/streakh/ourarag.git
    cd ourarag
    ```
 

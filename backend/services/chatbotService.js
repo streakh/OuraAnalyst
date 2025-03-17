@@ -375,6 +375,7 @@ exports.generateInsight = async (query) => {
       - Readiness data (readiness score, HRV balance, recovery index, etc.)
       
       Please analyze the data provided and give thoughtful, personalized insights and recommendations. If the data is in minutes, convert it to hours and minutes where appropriate.
+      If the user asks for a calculation, do not show all of the data just the result, unless they ask for it or it is very simple.
       If the user asks about data that's not available, kindly let them know and suggest what data they could ask about instead.
       Always be helpful, concise, and focus on actionable advice based on the data. 
       Format your response in a clear, readable way using markdown formatting where appropriate.
