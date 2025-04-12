@@ -148,11 +148,12 @@ async function storeSleepData(data, dailySleepData) {
     // Get the sleep score from the daily sleep data if available
     const sleepScore = sleepScoresByDate[sleep.day] || null;
     
-    if (sleepScore) {
-      console.log(`Found sleep score ${sleepScore} for date ${sleep.day}`);
-    } else {
-      console.log(`No sleep score found for date ${sleep.day}`);
-    }
+    // For debugging
+    // if (sleepScore) {
+    //   console.log(`Found sleep score ${sleepScore} for date ${sleep.day}`);
+    // } else {
+    //   console.log(`No sleep score found for date ${sleep.day}`);
+    // }
     
     // Create a data object with relevant sleep metrics
     const sleepRecord = {
