@@ -40,7 +40,6 @@ async function parseDateRangeFromQuery(query) {
 
         - If a specific date is mentioned (e.g., "on 2023-10-26"), set both startDate and endDate to that date.
         - For "yesterday" use the date for the previous day.
-        - For "last night", use the date of the current day.
         - For "today", use the date of the current day.
         - For "last week", use the 7-day period ending yesterday.
         - For "last month", use the entire previous calendar month.
@@ -142,28 +141,43 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to make API call with retry logic
 async function makeOpenAIRequest(messages, retries = 3, backoff = 1000) {
+  // try {
+  //   const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+  //     model: 'gpt-4o-mini',
+  //     messages,
+  //     temperature: 0.7,
+  //     max_tokens: 2000
+  //   }, {
+  //     headers: {
+  //       'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
+  //       'Content-Type': 'application/json'
+  //     }
+  //   });
+    
+  //   return response.data.choices[0].message.content;
+  // } catch (error) {
+  //   if (error.response && error.response.status === 429 && retries > 0) {
+  //     // Rate limited, wait and retry
+  //     console.log(`Rate limited, retrying in ${backoff}ms...`);
+  //     await delay(backoff);
+  //     return makeOpenAIRequest(messages, retries - 1, backoff * 2);
+  //   }
+    
+  //   throw error;
+  // }
+
+  const model = new ChatOpenAI({
+    model: "gpt-4o-mini",
+    temperature: 0.7,
+    max_tokens: 2000
+  });
+
   try {
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4o-mini',
-      messages,
-      temperature: 0.7,
-      max_tokens: 2000
-    }, {
-      headers: {
-        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    return response.data.choices[0].message.content;
+    const response = await model.invoke(messages);
+    return response.content;
+
   } catch (error) {
-    if (error.response && error.response.status === 429 && retries > 0) {
-      // Rate limited, wait and retry
-      console.log(`Rate limited, retrying in ${backoff}ms...`);
-      await delay(backoff);
-      return makeOpenAIRequest(messages, retries - 1, backoff * 2);
-    }
-    
+    console.error('Error making OpenAI request:', error);
     throw error;
   }
 }
@@ -383,7 +397,9 @@ exports.generateInsight = async (query) => {
       { role: 'user', content: query }
     ];
     
-    return await makeOpenAIRequest(messages);
+    const response = await makeOpenAIRequest(messages);
+    return response;
+
   } catch (error) {
     console.error('Error generating insight:', error);
     throw error;
