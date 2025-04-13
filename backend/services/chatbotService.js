@@ -97,74 +97,11 @@ async function parseDateRangeFromQuery(query) {
   return { startDate, endDate };
 }
 
-// Determine appropriate data limits based on query and date range
-function determineDataLimits(query, startDate, endDate) {
-  // Calculate the date range in days
-  const dayDifference = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-  
-  // Set database limit based on query context
-  let dbLimit = 60; // Default limit
-  
-  if (dayDifference <= 1) {
-    // For single day queries (like "yesterday")
-    dbLimit = 10;
-  } else if (dayDifference <= 7) {
-    // For week-long queries
-    dbLimit = 30;
-  } else if (dayDifference <= 14) {
-    // For two-week queries
-    dbLimit = 40;
-  } else {
-    // For longer queries (up to a month)
-    dbLimit = 60;
-  }
-  
-  // Check for specific query patterns that might need more data
-  if (/trend|pattern|compare|correlation|over time/i.test(query)) {
-    // Trend analysis needs more data points
-    dbLimit = Math.max(dbLimit, dayDifference * 2);
-  }
-  
-  if (/average|mean|median|typical/i.test(query)) {
-    // Statistical queries benefit from more data
-    dbLimit = Math.max(dbLimit, dayDifference * 2);
-  }
-  
-  // Cap the limit at 100 to prevent excessive data retrieval
-  dbLimit = Math.min(dbLimit, 100);
-  
-  return dbLimit;
-}
-
 // Helper function to delay execution
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to make API call with retry logic
-async function makeOpenAIRequest(messages, retries = 3, backoff = 1000) {
-  // try {
-  //   const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-  //     model: 'gpt-4o-mini',
-  //     messages,
-  //     temperature: 0.7,
-  //     max_tokens: 2000
-  //   }, {
-  //     headers: {
-  //       'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-  //       'Content-Type': 'application/json'
-  //     }
-  //   });
-    
-  //   return response.data.choices[0].message.content;
-  // } catch (error) {
-  //   if (error.response && error.response.status === 429 && retries > 0) {
-  //     // Rate limited, wait and retry
-  //     console.log(`Rate limited, retrying in ${backoff}ms...`);
-  //     await delay(backoff);
-  //     return makeOpenAIRequest(messages, retries - 1, backoff * 2);
-  //   }
-    
-  //   throw error;
-  // }
+async function makeOpenAIRequest(messages) {
 
   const model = new ChatOpenAI({
     model: "gpt-4o-mini",
@@ -331,14 +268,10 @@ exports.generateInsight = async (query) => {
     // Parse date range from the query - now with await
     let { startDate, endDate } = await parseDateRangeFromQuery(query);
     
-    
-    // Determine appropriate limits based on the query and date range
-    const dbLimit = determineDataLimits(query, startDate, endDate);
-    
-    console.log(`Query: "${query}" | Type: ${queryType} | Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} | Limits: DB=${dbLimit}`);
+    console.log(`Query: "${query}" | Type: ${queryType} | Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
     
     // Fetch relevant Oura data based on the query type and date range
-    let ouraData = await ouraService.fetchDataForQuery(queryType, startDate, endDate, dbLimit);
+    let ouraData = await ouraService.fetchDataForQuery(queryType, startDate, endDate);
     
     // If no data is found, return a helpful message
     if (!ouraData || 

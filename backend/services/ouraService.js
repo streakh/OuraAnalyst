@@ -327,53 +327,53 @@ exports.storeData = async (data) => {
  * @param {string} queryType - Type of query (sleep, activity, readiness)
  * @param {Date} startDate - Start date
  * @param {Date} endDate - End date
- * @param {number} limit - Maximum number of records to return
- * @returns {Promise<Array>} - Data for the query
+ * @returns {Promise<Array|Object>} - Data for the query
  */
-exports.fetchDataForQuery = async (queryType, startDate, endDate, limit = 100) => {
+exports.fetchDataForQuery = async (queryType, startDate, endDate) => {
   try {
     let data = [];
     
-    // Set default date range if not provided
+    // Set default date range if not provided (adjust as needed)
     if (!startDate) {
       startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7); // Default to last 7 days instead of 30
+      startDate.setDate(startDate.getDate() - 7);
     }
-    
     if (!endDate) {
       endDate = new Date();
     }
     
+    console.log(`OuraService fetching data from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} for type: ${queryType}`);
+
     // Query the appropriate model based on query type
     switch (queryType) {
       case 'sleep':
         data = await SleepData.find({
           day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).limit(limit).lean();
+        }).sort({ day: -1 }).lean(); // Removed .limit()
         break;
       case 'activity':
         data = await ActivityData.find({
           day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).limit(limit).lean();
+        }).sort({ day: -1 }).lean(); // Removed .limit()
         break;
       case 'readiness':
         data = await ReadinessData.find({
           day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).limit(limit).lean();
+        }).sort({ day: -1 }).lean(); // Removed .limit()
         break;
       case 'general':
       case 'recommendation':
-        // For general queries, fetch all data types but limit each
+        // For general queries, fetch all data types without limit
         const [sleepData, activityData, readinessData] = await Promise.all([
           SleepData.find({
             day: { $gte: startDate, $lte: endDate }
-          }).sort({ day: -1 }).limit(limit).lean(),
+          }).sort({ day: -1 }).lean(), // Removed .limit()
           ActivityData.find({
             day: { $gte: startDate, $lte: endDate }
-          }).sort({ day: -1 }).limit(limit).lean(),
+          }).sort({ day: -1 }).lean(), // Removed .limit()
           ReadinessData.find({
             day: { $gte: startDate, $lte: endDate }
-          }).sort({ day: -1 }).limit(limit).lean()
+          }).sort({ day: -1 }).lean() // Removed .limit()
         ]);
         
         data = {
@@ -386,6 +386,13 @@ exports.fetchDataForQuery = async (queryType, startDate, endDate, limit = 100) =
         throw new Error(`Unknown query type: ${queryType}`);
     }
     
+    // Log the number of records found
+    if (Array.isArray(data)) {
+      console.log(`Found ${data.length} ${queryType} records.`);
+    } else {
+      console.log(`Found ${data.sleep.length} sleep, ${data.activity.length} activity, ${data.readiness.length} readiness records.`);
+    }
+
     return data;
   } catch (error) {
     console.error(`Error fetching data for query type ${queryType}:`, error);
