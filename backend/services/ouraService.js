@@ -38,10 +38,10 @@ class OuraApiClient {
 
   /**
    * Get date range parameters for API requests
-   * @param {number} days - Number of days to fetch (default: 30)
+   * @param {number} days - Number of days to fetch (default: 365)
    * @returns {Object} - start_date and end_date parameters
    */
-  getDateRange(days = 30) {
+  getDateRange(days = 365) {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - days);
@@ -54,40 +54,40 @@ class OuraApiClient {
 
   /**
    * Fetch sleep data from the Oura API
-   * @param {number} days - Number of days to fetch
+   * @param {number} days - Number of days to fetch (default: 365)
    * @returns {Promise<Object>} - Sleep data
    */
-  async fetchSleepData(days = 30) {
+  async fetchSleepData(days = 365) {
     const params = this.getDateRange(days);
     return this.makeRequest('sleep', params);
   }
 
   /**
    * Fetch daily sleep data from the Oura API (for sleep scores)
-   * @param {number} days - Number of days to fetch
+   * @param {number} days - Number of days to fetch (default: 365)
    * @returns {Promise<Object>} - Daily sleep data with sleep scores
    */
-  async fetchDailySleepData(days = 30) {
+  async fetchDailySleepData(days = 365) {
     const params = this.getDateRange(days);
     return this.makeRequest('daily_sleep', params);
   }
 
   /**
    * Fetch activity data from the Oura API
-   * @param {number} days - Number of days to fetch
+   * @param {number} days - Number of days to fetch (default: 365)
    * @returns {Promise<Object>} - Activity data
    */
-  async fetchActivityData(days = 30) {
+  async fetchActivityData(days = 365) {
     const params = this.getDateRange(days);
     return this.makeRequest('daily_activity', params);
   }
 
   /**
    * Fetch readiness data from the Oura API
-   * @param {number} days - Number of days to fetch
+   * @param {number} days - Number of days to fetch (default: 365)
    * @returns {Promise<Object>} - Readiness data
    */
-  async fetchReadinessData(days = 30) {
+  async fetchReadinessData(days = 365) {
     const params = this.getDateRange(days);
     return this.makeRequest('daily_readiness', params);
   }
@@ -95,12 +95,14 @@ class OuraApiClient {
 
 /**
  * Fetch all types of data from the Oura API
- * @param {number} days - Number of days to fetch
+ * @param {number} days - Number of days to fetch (default: 365 for last year)
  * @returns {Promise<Object>} - All data types
  */
-exports.fetchLatestOuraData = async (days = 30) => {
+exports.fetchLatestOuraData = async (days = 365) => {
   try {
     const client = new OuraApiClient(config.ouraApiKey);
+    
+    console.log(`Fetching Oura data for the past ${days} days (up to 1 year of historical data)...`);
     
     // Fetch all data types in parallel
     const [sleepData, dailySleepData, activityData, readinessData] = await Promise.all([
@@ -331,15 +333,17 @@ exports.storeData = async (data) => {
  */
 exports.fetchDataForQuery = async (queryType, startDate, endDate) => {
   try {
-    let data = [];
-    
-    // Set default date range if not provided (adjust as needed)
-    if (!startDate) {
-      startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
+    let data = null; // Initialize as null to distinguish from empty array/object
+
+    // Ensure dates are valid Date objects
+    if (!(startDate instanceof Date) || isNaN(startDate)) {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+        console.warn("Invalid or missing startDate, defaulting to 7 days ago.");
     }
-    if (!endDate) {
-      endDate = new Date();
+    if (!(endDate instanceof Date) || isNaN(endDate)) {
+        endDate = new Date();
+        console.warn("Invalid or missing endDate, defaulting to today.");
     }
     
     console.log(`OuraService fetching data from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} for type: ${queryType}`);
@@ -349,38 +353,27 @@ exports.fetchDataForQuery = async (queryType, startDate, endDate) => {
       case 'sleep':
         data = await SleepData.find({
           day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).lean(); // Removed .limit()
+        }).sort({ day: -1 }).lean();
         break;
       case 'activity':
         data = await ActivityData.find({
           day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).lean(); // Removed .limit()
+        }).sort({ day: -1 }).lean();
         break;
       case 'readiness':
         data = await ReadinessData.find({
           day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).lean(); // Removed .limit()
+        }).sort({ day: -1 }).lean();
         break;
       case 'general':
       case 'recommendation':
         // For general queries, fetch all data types without limit
         const [sleepData, activityData, readinessData] = await Promise.all([
-          SleepData.find({
-            day: { $gte: startDate, $lte: endDate }
-          }).sort({ day: -1 }).lean(), // Removed .limit()
-          ActivityData.find({
-            day: { $gte: startDate, $lte: endDate }
-          }).sort({ day: -1 }).lean(), // Removed .limit()
-          ReadinessData.find({
-            day: { $gte: startDate, $lte: endDate }
-          }).sort({ day: -1 }).lean() // Removed .limit()
+          SleepData.find({ day: { $gte: startDate, $lte: endDate } }).sort({ day: -1 }).lean(),
+          ActivityData.find({ day: { $gte: startDate, $lte: endDate } }).sort({ day: -1 }).lean(),
+          ReadinessData.find({ day: { $gte: startDate, $lte: endDate } }).sort({ day: -1 }).lean()
         ]);
-        
-        data = {
-          sleep: sleepData,
-          activity: activityData,
-          readiness: readinessData
-        };
+        data = { sleep: sleepData, activity: activityData, readiness: readinessData };
         break;
       default:
         throw new Error(`Unknown query type: ${queryType}`);

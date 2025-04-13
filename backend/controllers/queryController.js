@@ -17,7 +17,7 @@ async function dataUpdateCheck() {
   // Update if this is the first query ever or if the update interval has passed
   if (lastUpdateTime === null || (currentTime - lastUpdateTime > UPDATE_INTERVAL)) {
     const reason = lastUpdateTime === null ? 'First query detected' : 'Session timeout (1 hour) exceeded';
-    console.log(`${reason}. Updating Oura data...`);
+    console.log(`${reason}. Updating Oura data (fetching up to 1 year of historical data)...`);
     
     try {
       // Fetch the latest data from the Oura API

@@ -76,8 +76,8 @@ async function parseDateRangeFromQuery(query) {
       const parsedStartDate = new Date(result.startDate);
       const parsedEndDate = new Date(result.endDate);
 
-      // parsedStartDate.setUTCHours(0, 0, 0, 0); 
-      // parsedEndDate.setUTCHours(23, 59, 59, 999);
+      parsedStartDate.setUTCHours(0, 0, 0, 0); 
+      parsedEndDate.setUTCHours(23, 59, 59, 999);
 
       if (!isNaN(parsedStartDate) && !isNaN(parsedEndDate) && parsedStartDate <= parsedEndDate) {
         console.log(`LangChain parsed dates: ${result.startDate} to ${result.endDate}`);
