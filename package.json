@@ -10,6 +10,7 @@
   "author": "Streak Honey",
   "license": "ISC",
   "dependencies": {
+    "@langchain/openai": "^0.5.5",
     "axios": "^1.8.3",
     "body-parser": "^1.20.3",
     "dotenv": "^16.4.7",

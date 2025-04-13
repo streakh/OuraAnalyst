@@ -3,106 +3,98 @@ const axios = require('axios');
 const config = require('../config');
 const ouraService = require('./ouraService');
 
-// Helper function to determine date range from query
-function parseDateRangeFromQuery(query) {
+// Import LangChain components
+const { ChatOpenAI } = require("@langchain/openai");
+const { PromptTemplate } = require("@langchain/core/prompts");
+const { JsonOutputParser } = require("@langchain/core/output_parsers");
+
+/**
+ * Uses LangChain and an LLM to extract the intended date range from a query.
+ * @param {string} query - The user's natural language query.
+ * @returns {Promise<{startDate: Date, endDate: Date}>} - The extracted start and end dates.
+ */
+async function parseDateRangeFromQuery(query) {
+
+  const model = new ChatOpenAI({
+    model: "gpt-4o-mini",
+    temperature: 0
+  });
+
+  // Keep format instructions as plain text
+  const formatInstructions = `Respond only in valid JSON. The JSON object you return should match the following schema:
+  {
+    "startDate": "YYYY-MM-DD",
+    "endDate": "YYYY-MM-DD"
+  }`;
+
+  const parser = new JsonOutputParser();
+
+  const currentDate = new Date().toISOString().split('T')[0];
+  console.log(`Current date: ${currentDate}`);
+
+  const template = `Analyze the user's query to determine the relevant date range.
+        The current date is {current_date}. Use this for relative calculations (e.g., 'yesterday', 'last week').
+
+        Respond ONLY with a JSON object matching the following schema:
+        {format_instructions}
+
+        - If a specific date is mentioned (e.g., "on 2023-10-26"), set both startDate and endDate to that date.
+        - For "yesterday" use the date for the previous day.
+        - For "last night", use the date of the current day.
+        - For "today", use the date of the current day.
+        - For "last week", use the 7-day period ending yesterday.
+        - For "last month", use the entire previous calendar month.
+        - For "last 7 days", use the 7 days ending today.
+        - For "this week", use the period from the previous Sunday to today.
+        - For "this month", use the period from the 1st of the current month to today.
+        - If no specific date or range is mentioned, or it's ambiguous (e.g., "how was my sleep?"), default to the last 7 days ending today.
+        - For queries like "ever" or "all time", return the last 30 days ending today. The application will handle data limits separately.
+
+        User Query: "{query}"
+
+        JSON Response:`;
+
+  const prompt = PromptTemplate.fromTemplate(template);
+
+  const chain = prompt.pipe(model).pipe(parser);
+
+  // Default date values (last 7 days) - used if parsing fails
   let endDate = new Date();
   let startDate = new Date();
-  startDate.setDate(endDate.getDate() - 7); // Default to last 7 days
-  
-  // For debugging
-  console.log(`Current date: ${endDate.toISOString().split('T')[0]}`);
-  
-  // Check if the query mentions specific time periods
-  const timeRegex = {
-    yesterday: /yesterday|last night/i,
-    lastWeek: /last week|past week|previous week|this week/i,
-    lastMonth: /last month|past month|previous month|this month/i,
-    lastFewDays: /last few days|past few days|recent days|past (\d+) days/i,
-    specific: /on (\d{4}-\d{2}-\d{2})|(\d{1,2}\/\d{1,2}\/\d{4})|(\d{1,2}\/\d{1,2}\/\d{2})/i,
-    dateRange: /from (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})|between (\d{4}-\d{2}-\d{2}) and (\d{4}-\d{2}-\d{2})/i,
-    year: /this year|past year|last year/i,
-    quarter: /this quarter|past quarter|last quarter/i,
-    ever: /ever|all time|overall|in total/i
-  };
-  
-  // Extract number of days if specified
-  const daysMatch = query.match(/past (\d+) days/i);
-  const requestedDays = daysMatch ? parseInt(daysMatch[1]) : null;
-  
-  // Adjust date range based on query
-  if (timeRegex.yesterday.test(query)) {
-    // Create a new date for yesterday
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(0, 0, 0, 0); // Set to beginning of day
-    
-    // Set both start and end date to yesterday
-    startDate = yesterday;
-    endDate = new Date(yesterday);
-    endDate.setHours(23, 59, 59, 999); // Set to end of day
-    
-    console.log(`Yesterday query detected. Setting date to: ${startDate.toISOString().split('T')[0]}`);
-  } else if (timeRegex.lastWeek.test(query)) {
-    startDate.setDate(endDate.getDate() - 7);
-  } else if (timeRegex.lastMonth.test(query)) {
-    startDate.setMonth(endDate.getMonth() - 1);
-  } else if (requestedDays) {
-    // If user specified a number of days, use that (up to 30)
-    const days = Math.min(requestedDays, 30);
-    startDate.setDate(endDate.getDate() - days);
-  } else if (timeRegex.lastFewDays.test(query)) {
-    startDate.setDate(endDate.getDate() - 3);
-  } else if (timeRegex.year.test(query)) {
-    // Limit to 30 days even if they ask for a year
-    startDate.setDate(endDate.getDate() - 30);
-  } else if (timeRegex.quarter.test(query)) {
-    // Limit to 30 days even if they ask for a quarter
-    startDate.setDate(endDate.getDate() - 30);
-  } else if (timeRegex.ever.test(query)) {
-    // Limit to 30 days even if they ask for all time
-    startDate.setDate(endDate.getDate() - 30);
-  }
-  
-  // Check for specific date range in query
-  const dateRangeMatch = query.match(timeRegex.dateRange);
-  if (dateRangeMatch) {
-    // Extract dates from the match
-    const fromDate = dateRangeMatch[1] || dateRangeMatch[3];
-    const toDate = dateRangeMatch[2] || dateRangeMatch[4];
-    
-    if (fromDate && toDate) {
-      const parsedStartDate = new Date(fromDate);
-      const parsedEndDate = new Date(toDate);
-      
-      // Validate dates and ensure range is not more than 30 days
-      if (!isNaN(parsedStartDate) && !isNaN(parsedEndDate)) {
-        const dayDifference = Math.floor((parsedEndDate - parsedStartDate) / (1000 * 60 * 60 * 24));
-        
-        if (dayDifference <= 30) {
-          startDate = parsedStartDate;
-          endDate = parsedEndDate;
-        } else {
-          // If range is more than 30 days, limit to 30 days ending on the requested end date
-          startDate = new Date(parsedEndDate);
-          startDate.setDate(parsedEndDate.getDate() - 30);
-          endDate = parsedEndDate;
-        }
+  startDate.setDate(endDate.getDate() - 7);
+
+  try {
+    console.log(`Attempting LangChain date parsing"`);
+    const result = await chain.invoke({ 
+      query: query,
+      current_date: currentDate,
+      format_instructions: formatInstructions
+    });
+
+    // console.log("LangChain date extraction result: ", result); // Optional: Keep for detailed debugging
+
+    if (result && result.startDate && result.endDate) {
+      const parsedStartDate = new Date(result.startDate);
+      const parsedEndDate = new Date(result.endDate);
+
+      // parsedStartDate.setUTCHours(0, 0, 0, 0); 
+      // parsedEndDate.setUTCHours(23, 59, 59, 999);
+
+      if (!isNaN(parsedStartDate) && !isNaN(parsedEndDate) && parsedStartDate <= parsedEndDate) {
+        console.log(`LangChain parsed dates: ${result.startDate} to ${result.endDate}`);
+        return { startDate: parsedStartDate, endDate: parsedEndDate };
+      } else {
+        console.warn(`LangChain returned invalid date range: ${result.startDate} - ${result.endDate}. Falling back to default.`);
       }
+    } else {
+       console.warn("LangChain did not return complete startDate/endDate. Falling back to default.");
     }
+  } catch (error) {
+    console.error(`Error during LangChain date parsing: ${error.message}`);
   }
   
-  // Check for specific date in query
-  const specificDateMatch = query.match(timeRegex.specific);
-  if (specificDateMatch) {
-    const dateStr = specificDateMatch[0].replace(/on /i, '');
-    const parsedDate = new Date(dateStr);
-    
-    if (!isNaN(parsedDate)) {
-      startDate = parsedDate;
-      endDate = new Date(parsedDate);
-    }
-  }
-  
+  // Return default date range if parsing failed or resulted in invalid dates
+  console.log(`Falling back to default date range (last 7 days).`);
   return { startDate, endDate };
 }
 
@@ -158,7 +150,7 @@ async function makeOpenAIRequest(messages, retries = 3, backoff = 1000) {
       max_tokens: 2000
     }, {
       headers: {
-        'Authorization': `Bearer ${config.chatGPTKey}`,
+        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       }
     });
@@ -322,42 +314,9 @@ exports.generateInsight = async (query) => {
       queryType = 'recommendation';
     }
     
-    // Check if this is a "yesterday" query
-    const isYesterdayQuery = /yesterday|last night|yesterday night|day before/i.test(query);
+    // Parse date range from the query - now with await
+    let { startDate, endDate } = await parseDateRangeFromQuery(query);
     
-    // Parse date range from the query
-    let { startDate, endDate } = parseDateRangeFromQuery(query);
-    
-    // If this is a "yesterday" query, let's check if we have data for the most recent date
-    if (isYesterdayQuery) {
-      const mostRecentData = await ouraService.getMostRecentDataDate();
-      
-      if (mostRecentData) {
-        const mostRecentDate = new Date(mostRecentData);
-        const formattedDate = mostRecentDate.toISOString().split('T')[0];
-        const yesterdayDate = startDate.toISOString().split('T')[0];
-        
-        console.log(`Yesterday query detected. Yesterday date: ${yesterdayDate}, Most recent data date: ${formattedDate}`);
-        
-        // Always use the most recent data date for "yesterday" queries
-        console.log(`Using most recent date (${formattedDate}) for yesterday query`);
-        
-        // Create new dates for the most recent data
-        const newStartDate = new Date(mostRecentDate);
-        newStartDate.setHours(0, 0, 0, 0);
-        const newEndDate = new Date(mostRecentDate);
-        newEndDate.setHours(23, 59, 59, 999);
-        
-        // Use the most recent date instead
-        startDate = newStartDate;
-        endDate = newEndDate;
-        
-        // If the dates don't match, update the query to reflect the date we're actually using
-        if (formattedDate !== yesterdayDate) {
-          query = query.replace(/yesterday|last night/i, `on ${formattedDate}`);
-        }
-      }
-    }
     
     // Determine appropriate limits based on the query and date range
     const dbLimit = determineDataLimits(query, startDate, endDate);
