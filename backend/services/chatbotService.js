@@ -16,7 +16,7 @@ const { JsonOutputParser } = require("@langchain/core/output_parsers");
 async function parseDateRangeFromQuery(query) {
 
   const model = new ChatOpenAI({
-    model: "gpt-4o-mini",
+    model: "gpt-4.1-nano",
     temperature: 0
   });
 
@@ -104,8 +104,8 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 async function makeOpenAIRequest(messages) {
 
   const model = new ChatOpenAI({
-    model: "gpt-4o-mini",
-    temperature: 0.7,
+    model: "gpt-4.1-mini",
+    temperature: 0.8,
     max_tokens: 2000
   });
 
