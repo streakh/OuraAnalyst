@@ -8,8 +8,8 @@ const dataController = require('../controllers/dataController');
 router.post('/query', queryController.processQuery);
 
 // Data management routes
-router.post('/update', dataController.updateOuraData);
-router.get('/test-oura', dataController.testOuraConnection);
-router.get('/data/:type', dataController.getData);
+// router.post('/update', dataController.updateOuraData);
+// router.get('/test-oura', dataController.testOuraConnection);
+// router.get('/data/:type', dataController.getData);
 
 module.exports = router;

@@ -2,11 +2,13 @@
 const axios = require('axios');
 const config = require('../config');
 const ouraService = require('./ouraService');
+// Import Mongoose models directly for querying
+const { SleepData, ActivityData, ReadinessData } = require('../models/OuraDataModel'); 
 
 // Import LangChain components
 const { ChatOpenAI } = require("@langchain/openai");
 const { PromptTemplate } = require("@langchain/core/prompts");
-const { JsonOutputParser } = require("@langchain/core/output_parsers");
+const { JsonOutputParser, StringOutputParser } = require("@langchain/core/output_parsers");
 
 /**
  * Uses LangChain and an LLM to extract the intended date range from a query.
@@ -97,6 +99,84 @@ async function parseDateRangeFromQuery(query) {
   return { startDate, endDate };
 }
 
+/**
+ * Uses LangChain and an LLM to detect which core data types are relevant to a query.
+ * @param {string} query - The user's natural language query.
+ * @returns {Promise<string[]>} - An array of relevant data types (e.g., ['sleep'], ['activity', 'readiness'], ['sleep', 'activity', 'readiness']).
+ */
+async function detectQueryTypeWithLangChain(query) {
+  const model = new ChatOpenAI({
+    model: "gpt-4.1-nano", // Using a fast model for classification
+    temperature: 0
+  });
+
+  // Define the output schema for an array of data types
+  const formatInstructions = `Respond only in valid JSON. The JSON object you return should contain a single key "relevantDataTypes" whose value is an array of strings. 
+  Each string in the array must be one of the following core data types: 'sleep', 'activity', 'readiness'. The array can contain one, two, or all three types, depending on what's relevant to the query. 
+  If the query asks for recommendations or is general, include all types that might inform the answer.
+
+  Example formats:
+  { "relevantDataTypes": ["sleep"] }
+  { "relevantDataTypes": ["activity", "readiness"] }
+  { "relevantDataTypes": ["sleep", "activity", "readiness"] }`;
+
+  const parser = new JsonOutputParser();
+
+  const template = `Analyze the user's query to determine which core Oura data types are needed to provide a comprehensive answer. The available core data types are 'sleep', 'activity', and 'readiness'.
+
+        Identify ALL relevant data types based on the query:
+        - If the query is specifically about sleep (patterns, quality, duration, stages, bedtime, wake time, naps), include 'sleep'.
+        - If the query is specifically about physical movement (steps, calories, exercise, workouts, activity levels, distance, MET), include 'activity'.
+        - If the query is specifically about recovery or state (readiness score, HRV, body temperature, resting heart rate, energy levels), include 'readiness'.
+        - If the query asks for recommendations, advice, or compares data across categories (e.g., "how did my run affect my sleep?", "tips for better recovery"), include ALL data types ('sleep', 'activity', 'readiness') as they might all be relevant.
+        - If the query is general or vague (e.g., "how was my day?", "summarize my week"), include ALL data types ('sleep', 'activity', 'readiness').
+
+        Respond ONLY with a JSON object matching the schema described below:
+        {format_instructions}
+
+        User Query: "{query}"
+
+        JSON Response:`;
+
+  const prompt = PromptTemplate.fromTemplate(template);
+
+  const chain = prompt.pipe(model).pipe(parser);
+
+  // Default to all types if detection fails
+  const fallbackTypes = ['sleep', 'activity', 'readiness'];
+
+  try {
+    console.log(`Attempting LangChain data type detection for: "${query}"`);
+    const result = await chain.invoke({
+      query: query,
+      format_instructions: formatInstructions
+    });
+
+    // console.log("LangChain data types result:", result); // Optional: Keep for detailed debugging
+
+    // Validate the result structure and content
+    if (result && Array.isArray(result.relevantDataTypes) && result.relevantDataTypes.length > 0) {
+       const validTypes = result.relevantDataTypes.filter(type => ['sleep', 'activity', 'readiness'].includes(type));
+       if (validTypes.length === result.relevantDataTypes.length) {
+         // Ensure unique types
+         const uniqueTypes = [...new Set(validTypes)];
+         console.log(`LangChain detected relevant data types: ${JSON.stringify(uniqueTypes)}`);
+         return uniqueTypes;
+       } else {
+          console.warn(`LangChain returned array with invalid types: ${JSON.stringify(result.relevantDataTypes)}. Falling back to all types.`);
+       }
+    } else {
+      console.warn(`LangChain returned invalid or unexpected structure: ${JSON.stringify(result)}. Falling back to all types.`);
+    }
+  } catch (error) {
+    console.error(`Error during LangChain data type detection: ${error.message}. Falling back to all types.`);
+  }
+
+  // Fallback if detection fails or returns invalid format
+  console.log(`Falling back to default data types: ${JSON.stringify(fallbackTypes)}`);
+  return fallbackTypes;
+}
+
 // Helper function to delay execution
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -104,8 +184,8 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 async function makeOpenAIRequest(messages) {
 
   const model = new ChatOpenAI({
-    model: "gpt-4.1-mini",
-    temperature: 0.8,
+    model: "o4-mini",
+    temperature: 1,
     max_tokens: 2000
   });
 
@@ -236,100 +316,118 @@ function simplifyData(data) {
   }
 }
 
-exports.generateInsight = async (query) => {
+
+
+// Modify generateInsight to query DB directly
+async function generateInsight(query, relevantDataTypes) {
   try {
-    // Check for keywords related to each data type
-    const hasSleepKeywords = /sleep|slept|bed|dream|nap|snore|insomnia|rem|deep sleep|light sleep/i.test(query);
-    const hasActivityKeywords = /activity|exercise|walk|run|steps|move|workout|active|calories|training/i.test(query);
-    const hasReadinessKeywords = /ready|readiness|recovery|prepared|recover|rested|energy|temperature|temp/i.test(query);
-    const hasRecommendationKeywords = /recommend|suggest|advice|improve|better|enhance|tips|help me|should i|how can i/i.test(query);
-    
-    // Determine query type based on keyword combinations
-    let queryType = 'general';
-    
-    // If query contains keywords from multiple categories, use 'general'
-    if ((hasSleepKeywords && hasActivityKeywords) || 
-        (hasSleepKeywords && hasReadinessKeywords) || 
-        (hasActivityKeywords && hasReadinessKeywords)) {
-      queryType = 'general';
-      console.log('Mixed query detected with multiple data types. Using general query type.');
-    }
-    // Otherwise, use the specific category
-    else if (hasSleepKeywords) {
-      queryType = 'sleep';
-    } else if (hasActivityKeywords) {
-      queryType = 'activity';
-    } else if (hasReadinessKeywords) {
-      queryType = 'readiness';
-    } else if (hasRecommendationKeywords) {
-      queryType = 'recommendation';
-    }
-    
-    // Parse date range from the query - now with await
+    // Date range parsing remains the same
     let { startDate, endDate } = await parseDateRangeFromQuery(query);
-    
-    console.log(`Query: "${query}" | Type: ${queryType} | Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
-    
-    // Fetch relevant Oura data based on the query type and date range
-    let ouraData = await ouraService.fetchDataForQuery(queryType, startDate, endDate);
-    
-    // If no data is found, return a helpful message
-    if (!ouraData || 
-        (Array.isArray(ouraData) && ouraData.length === 0) || 
-        (ouraData.sleep && ouraData.sleep.length === 0 && 
-         ouraData.activity && ouraData.activity.length === 0 && 
-         ouraData.readiness && ouraData.readiness.length === 0)) {
-      
-      // Get the most recent data date
-      const mostRecentData = await ouraService.getMostRecentDataDate();
-      
-      if (mostRecentData) {
-        const mostRecentDate = new Date(mostRecentData);
-        const formattedDate = mostRecentDate.toISOString().split('T')[0];
-        
-        return `I couldn't find any Oura data for the specified time period. The most recent data available is from ${formattedDate}. Try asking about that date instead, for example: "What was my sleep score on ${formattedDate}?"`;
+
+    console.log(`Query: "${query}" | Relevant Types: ${JSON.stringify(relevantDataTypes)} | Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+
+    // --- Database Query Logic --- 
+    const queryPromises = [];
+    const dataQuery = {
+      day: {
+        $gte: startDate,
+        $lte: endDate
       }
-      
-      return "I couldn't find any Oura data for the specified time period. Please try a different query or make sure your Oura data is up to date.";
+    };
+
+    // Add queries based on relevantDataTypes
+    if (relevantDataTypes.includes('sleep')) {
+      queryPromises.push(SleepData.find(dataQuery).lean().exec());
+    } else {
+      queryPromises.push(Promise.resolve([])); // Placeholder for consistent array structure
     }
+    if (relevantDataTypes.includes('activity')) {
+      queryPromises.push(ActivityData.find(dataQuery).lean().exec());
+    } else {
+      queryPromises.push(Promise.resolve([])); // Placeholder
+    }
+    if (relevantDataTypes.includes('readiness')) {
+      queryPromises.push(ReadinessData.find(dataQuery).lean().exec());
+    } else {
+      queryPromises.push(Promise.resolve([])); // Placeholder
+    }
+
+    console.log(`Executing DB queries for types: ${relevantDataTypes.join(', ')} within date range...`);
     
-    // Simplify and limit the data to avoid token limits
+    // Execute queries in parallel
+    const [sleepResults, activityResults, readinessResults] = await Promise.all(queryPromises);
+
+    // Construct the ouraData object
+    const ouraData = {
+      sleep: sleepResults,
+      activity: activityResults,
+      readiness: readinessResults
+    };
+    // --- End Database Query Logic ---
+    
+    // Check if any data was returned from the queries
+    const hasData = 
+      (ouraData.sleep && ouraData.sleep.length > 0) || 
+      (ouraData.activity && ouraData.activity.length > 0) || 
+      (ouraData.readiness && ouraData.readiness.length > 0);
+
+    // No data found handling (using the correct ouraService function now)
+    if (!hasData) {
+      const mostRecentData = await ouraService.getMostRecentDataDate(); // Correct function call
+
+      if (mostRecentData) {
+        const formattedDate = mostRecentData.toISOString().split('T')[0];
+        return `I couldn't find any Oura data for the specified time period (${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}). The most recent data available is from ${formattedDate}. Try asking about that date or a range including it.`;
+      }
+
+      return `I couldn't find any Oura data stored for the specified time period (${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}). Please try a different query or ensure your data has been fetched and stored.`;
+    }
+
+    // Simplify the data retrieved from DB
     const simplifiedData = simplifyData(ouraData);
-    
-    // Prepare a system message that explains what data is available
+
+
+    // Determine which types were actually returned for the system message
+    const returnedTypes = [];
+    if (ouraData.sleep.length > 0) returnedTypes.push('Sleep');
+    if (ouraData.activity.length > 0) returnedTypes.push('Activity');
+    if (ouraData.readiness.length > 0) returnedTypes.push('Readiness');
+
+    // System message preparation
     const systemMessage = {
       role: 'system',
-      content: `You are an AI assistant that provides insights and recommendations based on Oura Ring health data. 
-      You have access to the following data from the user's Oura Ring: 
+      content: `You are an AI assistant that provides insights and recommendations based on Oura Ring health data.
+      You have access to the following data types from the user's Oura Ring for the requested period: ${returnedTypes.join(', ')}.
       - Sleep data (sleep score, sleep duration, deep sleep, REM sleep, etc.)
       - Activity data (steps, calories, activity levels, etc.)
       - Readiness data (readiness score, HRV balance, recovery index, etc.)
-      
-      Please analyze the data provided and give thoughtful, personalized insights and recommendations. If the data is in minutes, convert it to hours and minutes where appropriate.
-      If the user asks for a calculation, do not show all of the data just the result, unless they ask for it or it is very simple.
-      If the user asks about data that's not available, kindly let them know and suggest what data they could ask about instead.
-      Always be helpful, concise, and focus on actionable advice based on the data. 
+
+      Please analyze the provided data and give thoughtful, personalized insights and recommendations relevant to the user's query.
+      If the data is in minutes, convert it to hours and minutes where appropriate (e.g., 135 minutes -> 2 hours 15 minutes).
+      If the user asks for a calculation, provide the result directly unless the underlying data is simple or requested.
+      If the user asks about data that's not available for the period, kindly let them know.
+      Always be helpful, concise, and focus on actionable advice based on the data.
       Format your response in a clear, readable way using markdown formatting where appropriate.
       Ensure your response is concise and directly addresses the user's query, while still providing all the necessary information.`
     };
-    
-    // Prepare a context message with the relevant data
+
+    // Context message preparation
     const contextMessage = {
       role: 'system',
       content: `Here is the relevant Oura data for your analysis:
       Date Range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}
-      Query Type: ${queryType}
-      
-      ${JSON.stringify(simplifiedData, null, 2)}`
+      Relevant Data Types Requested by Query Analyzer: ${JSON.stringify(relevantDataTypes)}
+
+      ${JSON.stringify(simplifiedData, null, 2)}` // Send simplified data from DB
     };
-    
-    // Make the API call to ChatGPT with the data context and retry logic
+
+
     const messages = [
       systemMessage,
       contextMessage,
       { role: 'user', content: query }
     ];
-    
+
     const response = await makeOpenAIRequest(messages);
     return response;
 
@@ -337,4 +435,11 @@ exports.generateInsight = async (query) => {
     console.error('Error generating insight:', error);
     throw error;
   }
+}
+
+// Export the functions
+module.exports = {
+  parseDateRangeFromQuery,
+  detectQueryTypeWithLangChain,
+  generateInsight,
 };

@@ -394,36 +394,32 @@ exports.fetchDataForQuery = async (queryType, startDate, endDate) => {
 };
 
 /**
- * Get the most recent date for which we have data
- * @returns {Promise<string|null>} - The most recent date in ISO format, or null if no data
+ * Find the most recent date present in any of the Oura data collections.
+ * @returns {Promise<Date|null>} - The most recent date found, or null if no data exists.
  */
 exports.getMostRecentDataDate = async () => {
   try {
-    // Try to get the most recent sleep data
-    const mostRecentSleep = await SleepData.findOne().sort({ day: -1 }).lean();
-    
-    if (mostRecentSleep && mostRecentSleep.day) {
-      return mostRecentSleep.day;
+    const latestSleep = await SleepData.findOne().sort({ day: -1 }).select('day').lean();
+    const latestActivity = await ActivityData.findOne().sort({ day: -1 }).select('day').lean();
+    const latestReadiness = await ReadinessData.findOne().sort({ day: -1 }).select('day').lean();
+
+    const dates = [
+      latestSleep ? latestSleep.day : null,
+      latestActivity ? latestActivity.day : null,
+      latestReadiness ? latestReadiness.day : null
+    ].filter(date => date !== null); // Filter out nulls if a collection is empty
+
+    if (dates.length === 0) {
+      return null; // No data found in any collection
     }
+
+    // Find the maximum date among the latest entries
+    const maxDate = new Date(Math.max(...dates.map(date => date.getTime())));
     
-    // If no sleep data, try activity data
-    const mostRecentActivity = await ActivityData.findOne().sort({ day: -1 }).lean();
-    
-    if (mostRecentActivity && mostRecentActivity.day) {
-      return mostRecentActivity.day;
-    }
-    
-    // If no activity data, try readiness data
-    const mostRecentReadiness = await ReadinessData.findOne().sort({ day: -1 }).lean();
-    
-    if (mostRecentReadiness && mostRecentReadiness.day) {
-      return mostRecentReadiness.day;
-    }
-    
-    // No data found
-    return null;
+    return maxDate;
+
   } catch (error) {
-    console.error('Error getting most recent data date:', error);
-    return null;
+    console.error("Error getting most recent data date:", error);
+    return null; // Return null on error
   }
 };
