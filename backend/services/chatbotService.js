@@ -2,8 +2,6 @@
 const axios = require('axios');
 const config = require('../config');
 const ouraService = require('./ouraService');
-// Import Mongoose models directly for querying
-const { SleepData, ActivityData, ReadinessData } = require('../models/OuraDataModel'); 
 
 // Import LangChain components
 const { ChatOpenAI } = require("@langchain/openai");
@@ -32,7 +30,7 @@ async function parseDateRangeFromQuery(query) {
   const parser = new JsonOutputParser();
 
   const currentDate = new Date().toISOString().split('T')[0];
-  console.log(`Current date: ${currentDate}`);
+  // console.log(`Current date: ${currentDate}`);
 
   const template = `Analyze the user's query to determine the relevant date range.
         The current date is {current_date}. Use this for relative calculations (e.g., 'yesterday', 'last week').
@@ -65,14 +63,13 @@ async function parseDateRangeFromQuery(query) {
   startDate.setDate(endDate.getDate() - 7);
 
   try {
-    console.log(`Attempting LangChain date parsing"`);
+    // console.log('Attempting LangChain date parsing');
     const result = await chain.invoke({ 
       query: query,
       current_date: currentDate,
       format_instructions: formatInstructions
     });
 
-    // console.log("LangChain date extraction result: ", result); // Optional: Keep for detailed debugging
 
     if (result && result.startDate && result.endDate) {
       const parsedStartDate = new Date(result.startDate);
@@ -146,13 +143,11 @@ async function detectQueryTypeWithLangChain(query) {
   const fallbackTypes = ['sleep', 'activity', 'readiness'];
 
   try {
-    console.log(`Attempting LangChain data type detection for: "${query}"`);
+    // console.log('Attempting LangChain data type detection');
     const result = await chain.invoke({
       query: query,
       format_instructions: formatInstructions
     });
-
-    // console.log("LangChain data types result:", result); // Optional: Keep for detailed debugging
 
     // Validate the result structure and content
     if (result && Array.isArray(result.relevantDataTypes) && result.relevantDataTypes.length > 0) {
@@ -177,9 +172,6 @@ async function detectQueryTypeWithLangChain(query) {
   return fallbackTypes;
 }
 
-// Helper function to delay execution
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 // Helper function to make API call with retry logic
 async function makeOpenAIRequest(messages) {
 
@@ -199,10 +191,9 @@ async function makeOpenAIRequest(messages) {
   }
 }
 
-// Helper function to simplify data without limiting records
+// Helper function to simplify data
 function simplifyData(data) {
   if (Array.isArray(data)) {
-    // Process all records without slicing or limiting
     return data.map(record => {
       // Extract all fields from the schemas
       const { 
@@ -317,55 +308,25 @@ function simplifyData(data) {
 }
 
 
-
-// Modify generateInsight to query DB directly
-async function generateInsight(query, relevantDataTypes) {
+async function generateInsight(query) {
   try {
-    // Date range parsing remains the same
-    let { startDate, endDate } = await parseDateRangeFromQuery(query);
+    // Run date range and query type parsing in parallel
+    console.log(`Initiating parallel parsing for query: "${query}"`);
+    const [dateResult, typeResult] = await Promise.all([
+      parseDateRangeFromQuery(query),
+      detectQueryTypeWithLangChain(query)
+    ]);
 
-    console.log(`Query: "${query}" | Relevant Types: ${JSON.stringify(relevantDataTypes)} | Date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+    const { startDate, endDate } = dateResult;
+    const relevantDataTypes = typeResult; // This is already the array, e.g., ['sleep']
 
-    // --- Database Query Logic --- 
-    const queryPromises = [];
-    const dataQuery = {
-      day: {
-        $gte: startDate,
-        $lte: endDate
-      }
-    };
 
-    // Add queries based on relevantDataTypes
-    if (relevantDataTypes.includes('sleep')) {
-      queryPromises.push(SleepData.find(dataQuery).lean().exec());
-    } else {
-      queryPromises.push(Promise.resolve([])); // Placeholder for consistent array structure
-    }
-    if (relevantDataTypes.includes('activity')) {
-      queryPromises.push(ActivityData.find(dataQuery).lean().exec());
-    } else {
-      queryPromises.push(Promise.resolve([])); // Placeholder
-    }
-    if (relevantDataTypes.includes('readiness')) {
-      queryPromises.push(ReadinessData.find(dataQuery).lean().exec());
-    } else {
-      queryPromises.push(Promise.resolve([])); // Placeholder
-    }
-
-    console.log(`Executing DB queries for types: ${relevantDataTypes.join(', ')} within date range...`);
-    
-    // Execute queries in parallel
-    const [sleepResults, activityResults, readinessResults] = await Promise.all(queryPromises);
-
-    // Construct the ouraData object
-    const ouraData = {
-      sleep: sleepResults,
-      activity: activityResults,
-      readiness: readinessResults
-    };
-    // --- End Database Query Logic ---
+    // Fetch data using ouraService
+    console.log(`Calling ouraService.fetchDataForQuery with types: ${JSON.stringify(relevantDataTypes)}`);
+    const ouraData = await ouraService.fetchDataForQuery(relevantDataTypes, startDate, endDate);
     
     // Check if any data was returned from the queries
+    // (ouraData is now guaranteed to be an object {sleep:[], activity:[], readiness:[]})
     const hasData = 
       (ouraData.sleep && ouraData.sleep.length > 0) || 
       (ouraData.activity && ouraData.activity.length > 0) || 
@@ -377,13 +338,21 @@ async function generateInsight(query, relevantDataTypes) {
 
       if (mostRecentData) {
         const formattedDate = mostRecentData.toISOString().split('T')[0];
-        return `I couldn't find any Oura data for the specified time period (${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}). The most recent data available is from ${formattedDate}. Try asking about that date or a range including it.`;
+        const message = `I couldn't find any Oura data for the specified time period (${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}). The most recent data available is from ${formattedDate}. Try asking about that date or a range including it.`;
+        return { 
+          response: message,
+          metadata: { queryType: relevantDataTypes } // Return detected types even if no data found
+        };
       }
 
-      return `I couldn't find any Oura data stored for the specified time period (${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}). Please try a different query or ensure your data has been fetched and stored.`;
+      return { 
+        response: `I couldn't find any Oura data stored for the specified time period (${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}). Please try a different query or ensure your data has been fetched and stored.`,
+        metadata: { queryType: relevantDataTypes } // Return detected types even if no data found
+      };
     }
 
     // Simplify the data retrieved from DB
+    // simplifyData already expects an object like {sleep: [...], activity: [...], readiness: [...]}
     const simplifiedData = simplifyData(ouraData);
 
 
@@ -428,12 +397,16 @@ async function generateInsight(query, relevantDataTypes) {
       { role: 'user', content: query }
     ];
 
-    const response = await makeOpenAIRequest(messages);
-    return response;
+    const responseText = await makeOpenAIRequest(messages);
+    // Return both the response text and the detected query type
+    return { 
+        response: responseText,
+        metadata: { queryType: relevantDataTypes } 
+    };
 
   } catch (error) {
     console.error('Error generating insight:', error);
-    throw error;
+    throw error; 
   }
 }
 

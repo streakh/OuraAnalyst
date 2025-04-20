@@ -102,7 +102,7 @@ exports.fetchLatestOuraData = async (days = 365) => {
   try {
     const client = new OuraApiClient(config.ouraApiKey);
     
-    console.log(`Fetching Oura data for the past ${days} days (up to 1 year of historical data)...`);
+    // console.log(`Fetching Oura data for the past ${days} days (up to 1 year of historical data)...`);
     
     // Fetch all data types in parallel
     const [sleepData, dailySleepData, activityData, readinessData] = await Promise.all([
@@ -325,15 +325,21 @@ exports.storeData = async (data) => {
 };
 
 /**
- * Fetch data for a specific query type and time range
- * @param {string} queryType - Type of query (sleep, activity, readiness)
+ * Fetch data for a specific query type or types and time range
+ * @param {string|string[]} queryType - Type(s) of query (e.g., 'sleep', 'activity', ['sleep', 'readiness'])
  * @param {Date} startDate - Start date
  * @param {Date} endDate - End date
- * @returns {Promise<Array|Object>} - Data for the query
+ * @returns {Promise<Object>} - An object containing keys for each requested data type (sleep, activity, readiness), 
+ *                            each mapping to an array of corresponding records.
  */
 exports.fetchDataForQuery = async (queryType, startDate, endDate) => {
   try {
-    let data = null; // Initialize as null to distinguish from empty array/object
+    // Initialize result object with empty arrays
+    let resultData = {
+      sleep: [],
+      activity: [],
+      readiness: []
+    };
 
     // Ensure dates are valid Date objects
     if (!(startDate instanceof Date) || isNaN(startDate)) {
@@ -346,50 +352,67 @@ exports.fetchDataForQuery = async (queryType, startDate, endDate) => {
         console.warn("Invalid or missing endDate, defaulting to today.");
     }
     
-    console.log(`OuraService fetching data from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} for type: ${queryType}`);
+    console.log(`OuraService fetching data from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} for type(s): ${JSON.stringify(queryType)}`);
 
-    // Query the appropriate model based on query type
-    switch (queryType) {
-      case 'sleep':
-        data = await SleepData.find({
-          day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).lean();
-        break;
-      case 'activity':
-        data = await ActivityData.find({
-          day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).lean();
-        break;
-      case 'readiness':
-        data = await ReadinessData.find({
-          day: { $gte: startDate, $lte: endDate }
-        }).sort({ day: -1 }).lean();
-        break;
-      case 'general':
-      case 'recommendation':
-        // For general queries, fetch all data types without limit
-        const [sleepData, activityData, readinessData] = await Promise.all([
-          SleepData.find({ day: { $gte: startDate, $lte: endDate } }).sort({ day: -1 }).lean(),
-          ActivityData.find({ day: { $gte: startDate, $lte: endDate } }).sort({ day: -1 }).lean(),
-          ReadinessData.find({ day: { $gte: startDate, $lte: endDate } }).sort({ day: -1 }).lean()
-        ]);
-        data = { sleep: sleepData, activity: activityData, readiness: readinessData };
-        break;
-      default:
-        throw new Error(`Unknown query type: ${queryType}`);
-    }
-    
-    // Log the number of records found
-    if (Array.isArray(data)) {
-      console.log(`Found ${data.length} ${queryType} records.`);
+    // Determine which types to fetch
+    let typesToFetch = [];
+    if (Array.isArray(queryType)) {
+      typesToFetch = queryType.filter(type => ['sleep', 'activity', 'readiness'].includes(type));
+    } else if (['sleep', 'activity', 'readiness'].includes(queryType)) {
+      // Keep this check for potential single string inputs, though LangChain should return an array
+      typesToFetch = [queryType];
     } else {
-      console.log(`Found ${data.sleep.length} sleep, ${data.activity.length} activity, ${data.readiness.length} readiness records.`);
+      console.warn(`Unknown or invalid query type format: ${JSON.stringify(queryType)}. Defaulting to fetch all types.`);
+      typesToFetch = ['sleep', 'activity', 'readiness']; // Default to all if unknown or invalid format
     }
 
-    return data;
+    // Ensure typesToFetch is not empty if filtering resulted in nothing
+    if (typesToFetch.length === 0) {
+      console.warn(`Query type array resulted in empty types to fetch: ${JSON.stringify(queryType)}. Defaulting to all types.`);
+      typesToFetch = ['sleep', 'activity', 'readiness'];
+    }
+
+    // Build database query
+    const dataQuery = {
+      day: { $gte: startDate, $lte: endDate }
+    };
+
+    // Create promises for fetching required data types
+    const queryPromises = [];
+    if (typesToFetch.includes('sleep')) {
+      queryPromises.push(
+        SleepData.find(dataQuery).sort({ day: -1 }).lean().then(data => ({ type: 'sleep', data }))
+      );
+    }
+    if (typesToFetch.includes('activity')) {
+      queryPromises.push(
+        ActivityData.find(dataQuery).sort({ day: -1 }).lean().then(data => ({ type: 'activity', data }))
+      );
+    }
+    if (typesToFetch.includes('readiness')) {
+      queryPromises.push(
+        ReadinessData.find(dataQuery).sort({ day: -1 }).lean().then(data => ({ type: 'readiness', data }))
+      );
+    }
+
+    // Execute queries in parallel
+    const results = await Promise.all(queryPromises);
+
+    // Populate the resultData object
+    results.forEach(result => {
+      if (result && result.type && result.data) {
+        resultData[result.type] = result.data;
+      }
+    });
+    
+    console.log(`Found ${resultData.sleep.length} sleep, ${resultData.activity.length} activity, ${resultData.readiness.length} readiness records.`);
+
+    return resultData; // Always return the object structure
+
   } catch (error) {
-    console.error(`Error fetching data for query type ${queryType}:`, error);
-    throw error;
+    console.error(`Error fetching data for query type(s) ${JSON.stringify(queryType)}:`, error);
+    // Return empty structure on error to prevent downstream issues
+    return { sleep: [], activity: [], readiness: [] }; 
   }
 };
 
