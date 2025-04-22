@@ -123,7 +123,15 @@ async function generateInsight(query) {
     // Return both the response text and the detected query type
     return { 
         response: responseText,
-        metadata: { queryType: relevantDataTypes } 
+        metadata: {
+          queryType: relevantDataTypes,
+          dateRange: {
+            start : startDate.toISOString().split('T')[0],
+            end   : endDate.toISOString().split('T')[0]
+          },
+          rawData: ouraData,
+          processedAt: new Date().toISOString(),
+        }
     };
 
   } catch (error) {

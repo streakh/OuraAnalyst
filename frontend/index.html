@@ -158,15 +158,50 @@
                 if (response.ok) {
                     // Use marked.js to parse markdown
                     const parsedMarkdown = marked.parse(data.response);
+
                     document.getElementById('responseContainer').innerHTML = `
-                        <div class="alert alert-success markdown-content">
-                            ${parsedMarkdown}
+                      <div class="alert alert-success markdown-content">${parsedMarkdown}</div>
+
+                      <div class="accordion mt-3" id="transparencyAcc">
+                        <div class="accordion-item">
+                          <h2 class="accordion-header" id="headingMeta">
+                            <button class="accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#collapseMeta"
+                                    aria-expanded="false" aria-controls="collapseMeta">
+                              Data used for this answer
+                            </button>
+                          </h2>
+
+                          <div id="collapseMeta" class="accordion-collapse collapse"
+                               aria-labelledby="headingMeta" data-bs-parent="#transparencyAcc">
+                            <div class="accordion-body small">
+                              <strong>Date range:</strong> ${data.metadata.dateRange.start}
+                              &nbsp;&rarr;&nbsp; ${data.metadata.dateRange.end}<br>
+                              <strong>Categories:</strong> ${data.metadata.queryType.join(', ')}
+
+                              <button id="showRawBtn" class="btn btn-outline-secondary btn-sm mt-2">
+                                 See full JSON
+                              </button>
+                              <pre id="rawBlock" class="d-none bg-light p-2 border rounded-2 mt-2"></pre>
+                            </div>
+                          </div>
                         </div>
-                        <div class="text-muted small mt-2">
-                            Query type: ${data.metadata.queryType}<br>
-                            Processed at: ${new Date(data.metadata.processedAt).toLocaleString()}
-                        </div>
+                      </div>
                     `;
+
+
+                    // toggle raw JSON view
+                    document.getElementById('showRawBtn').addEventListener('click', () => {
+                      const raw = document.getElementById('rawBlock');
+                      if (raw.classList.contains('d-none')) {
+                        raw.textContent = JSON.stringify(data.metadata.rawData, null, 2);
+                        raw.classList.remove('d-none');
+                        document.getElementById('showRawBtn').textContent = 'Hide full JSON';
+                      } else {
+                        raw.classList.add('d-none');
+                        document.getElementById('showRawBtn').textContent = 'See full JSON';
+                      }
+                    });
                 } else {
                     document.getElementById('responseContainer').innerHTML = `
                         <div class="alert alert-danger">
