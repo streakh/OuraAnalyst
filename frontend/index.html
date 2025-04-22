@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Oura Analyst</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         body {
             background-color: #f8f9fa;
@@ -71,6 +76,18 @@
             border: 1px solid #dee2e6;
             padding: 0.5rem;
         }
+        /* Remove borders from action buttons */
+        .response-actions .btn {
+            border: none;
+            box-shadow: none !important; /* Remove focus shadow */
+        }
+        .response-actions .btn:focus {
+            box-shadow: none !important;
+        }
+        /* Increase icon size in action buttons */
+        .response-actions .btn i {
+            font-size: 1.3rem; /* Adjust size as needed */
+        }
     </style>
 </head>
 <body>
@@ -89,12 +106,13 @@
                                 <div class="query-examples">
                                     <p class="text-muted mb-1">Try these examples:</p>
                                     <span class="example-chip" data-query="How was my sleep last week?">How was my sleep last week?</span>
-                                    <span class="example-chip" data-query="What's my average HRV over the past month?">What's my average HRV?</span>
+                                    <span class="example-chip" data-query="What's my average steps over the past month?">What's my average steps?</span>
                                     <span class="example-chip" data-query="Give me recommendations to improve my sleep.">Sleep recommendations</span>
                                     <span class="example-chip" data-query="What was my readiness score yesterday?">Yesterday's readiness</span>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-success">Get Insights</button>
+                            <button type="submit" class="btn btn-success me-2">Get Insights</button>
+                            <button type="button" id="clearButton" class="btn btn-outline-secondary">Clear</button>
                         </form>
                     </div>
                 </div>
@@ -106,7 +124,7 @@
                     <p class="mt-2">Analyzing your data...</p>
                 </div>
                 
-                <div class="card response-card">
+                <div class="card response-card mb-5">
                     <div class="card-body">
                         <h5 class="card-title">Insights</h5>
                         <div id="responseContainer">
@@ -158,9 +176,18 @@
                 if (response.ok) {
                     // Use marked.js to parse markdown
                     const parsedMarkdown = marked.parse(data.response);
+                    // Store the successful query for the redo button
+                    window.lastSuccessfulQuery = query;
 
                     document.getElementById('responseContainer').innerHTML = `
                       <div class="alert alert-success markdown-content">${parsedMarkdown}</div>
+
+                      <!-- Action Buttons -->
+                      <div class="response-actions mt-3 mb-3">
+                          <button class="btn btn-sm btn-outline-secondary me-2" id="redoButton" aria-label="Redo response" data-bs-toggle="tooltip" data-bs-placement="top" title="Redo response"><i class="bi bi-arrow-clockwise"></i></button>
+                          <button class="btn btn-sm btn-outline-secondary me-2" id="copyButton" aria-label="Copy response" data-bs-toggle="tooltip" data-bs-placement="top" title="Copy response"><i class="bi bi-clipboard"></i></button>
+                          <button class="btn btn-sm btn-outline-primary" id="savePdfButton" aria-label="Save as PDF" data-bs-toggle="tooltip" data-bs-placement="top" title="Save as PDF"><i class="bi bi-file-earmark-pdf"></i></button>
+                      </div>
 
                       <div class="accordion mt-3" id="transparencyAcc">
                         <div class="accordion-item">
@@ -192,16 +219,115 @@
 
                     // toggle raw JSON view
                     document.getElementById('showRawBtn').addEventListener('click', () => {
-                      const raw = document.getElementById('rawBlock');
-                      if (raw.classList.contains('d-none')) {
-                        raw.textContent = JSON.stringify(data.metadata.rawData, null, 2);
-                        raw.classList.remove('d-none');
-                        document.getElementById('showRawBtn').textContent = 'Hide full JSON';
+                      const rawBlock = document.getElementById('rawBlock');
+                      const btn = document.getElementById('showRawBtn');
+
+                      if (rawBlock.classList.contains('d-none')) {
+                        rawBlock.textContent = JSON.stringify(data.metadata.simplifiedData, null, 2);
+                        rawBlock.classList.remove('d-none');
+                        btn.textContent = 'Hide full JSON';
                       } else {
-                        raw.classList.add('d-none');
-                        document.getElementById('showRawBtn').textContent = 'See full JSON';
+                        rawBlock.classList.add('d-none');
+                        btn.textContent = 'See full JSON';
                       }
                     });
+
+                    // --- Action Button Handlers ---
+
+                    // Redo Button
+                    document.getElementById('redoButton').addEventListener('click', () => {
+                        if (window.lastSuccessfulQuery) {
+                            document.getElementById('queryInput').value = window.lastSuccessfulQuery;
+                            // Trigger form submission
+                            document.getElementById('queryForm').querySelector('button[type="submit"]').click();
+                        } else {
+                            alert('No previous query to redo.');
+                        }
+                    });
+
+                    // Copy Button
+                    document.getElementById('copyButton').addEventListener('click', async () => {
+                        const responseContent = document.querySelector('#responseContainer .markdown-content');
+                        const copyButton = document.getElementById('copyButton');
+                        if (responseContent && responseContent.textContent) {
+                            try {
+                                await navigator.clipboard.writeText(responseContent.textContent);
+                                // Provide feedback
+                                const originalText = copyButton.textContent;
+                                copyButton.textContent = 'Copied!';
+                                setTimeout(() => {
+                                    copyButton.textContent = originalText;
+                                }, 1500);
+                            } catch (err) {
+                                console.error('Failed to copy text: ', err);
+                                alert('Failed to copy text.');
+                            }
+                        } else {
+                            alert('No response content to copy.');
+                        }
+                    });
+
+                    // Save as PDF Button
+                    document.getElementById('savePdfButton').addEventListener('click', () => {
+                        const { jsPDF } = window.jspdf; // Get jsPDF constructor
+                        const responseContent = document.querySelector('#responseContainer .markdown-content');
+                        const saveButton = document.getElementById('savePdfButton');
+                        if (!responseContent) {
+                            alert('No content to save as PDF.');
+                            return;
+                        }
+                        if (typeof html2canvas === 'undefined' || typeof jsPDF === 'undefined') {
+                            alert('PDF generation libraries not loaded correctly.');
+                            return;
+                        }
+
+                        const originalText = saveButton.textContent;
+                        saveButton.textContent = 'Generating...';
+                        saveButton.disabled = true;
+
+                        html2canvas(responseContent, {
+                           scale: 2, // Improve resolution
+                           useCORS: true // If images are external
+                        }).then(canvas => {
+                            const imgData = canvas.toDataURL('image/png');
+                            const pdf = new jsPDF({
+                                orientation: 'portrait',
+                                unit: 'pt',
+                                format: 'a4'
+                            });
+
+                            const pdfWidth = pdf.internal.pageSize.getWidth();
+                            const pdfHeight = pdf.internal.pageSize.getHeight();
+                            const canvasWidth = canvas.width;
+                            const canvasHeight = canvas.height;
+                            const ratio = Math.min(pdfWidth / canvasWidth, pdfHeight / canvasHeight);
+
+                            // Calculate the dimensions of the image in the PDF
+                            const imgWidth = canvasWidth * ratio * 0.95; // Use 95% width
+                            const imgHeight = canvasHeight * ratio * 0.95;
+
+                            // Center the image
+                            const xPos = (pdfWidth - imgWidth) / 2;
+                            const yPos = 20; // Add some top margin
+
+                            pdf.addImage(imgData, 'PNG', xPos, yPos, imgWidth, imgHeight);
+                            pdf.save('oura_analysis.pdf');
+
+                        }).catch(err => {
+                            console.error("Error generating PDF:", err);
+                            alert('Failed to generate PDF.');
+                        }).finally(() => {
+                             saveButton.textContent = originalText;
+                             saveButton.disabled = false;
+                        });
+                    });
+
+                    // Initialize Bootstrap tooltips for action buttons
+                    const tooltipTriggerList = [].slice.call(document.querySelectorAll('.response-actions [data-bs-toggle="tooltip"]'));
+                    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                        return new bootstrap.Tooltip(tooltipTriggerEl);
+                    });
+
                 } else {
                     document.getElementById('responseContainer').innerHTML = `
                         <div class="alert alert-danger">
@@ -222,6 +348,11 @@
                 // Hide loading indicator
                 document.getElementById('loadingIndicator').style.display = 'none';
             }
+        });
+
+        // Add listener for the new Clear button
+        document.getElementById('clearButton').addEventListener('click', function() {
+            document.getElementById('queryInput').value = '';
         });
 
         // Add listener for Enter key in textarea

@@ -130,6 +130,7 @@ async function generateInsight(query) {
             end   : endDate.toISOString().split('T')[0]
           },
           rawData: ouraData,
+          simplifiedData: simplifiedData,
           processedAt: new Date().toISOString(),
         }
     };
