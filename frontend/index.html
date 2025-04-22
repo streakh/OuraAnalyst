@@ -111,7 +111,7 @@
                                     <span class="example-chip" data-query="What was my readiness score yesterday?">Yesterday's readiness</span>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-success me-2">Get Insights</button>
+                            <button type="submit" class="btn btn-success me-2 px-5">Get Insights</button>
                             <button type="button" id="clearButton" class="btn btn-outline-secondary">Clear</button>
                         </form>
                     </div>
@@ -124,7 +124,7 @@
                     <p class="mt-2">Analyzing your data...</p>
                 </div>
                 
-                <div class="card response-card mb-5">
+                <div class="card response-card mb-5 d-none" id="responseCard">
                     <div class="card-body">
                         <h5 class="card-title">Insights</h5>
                         <div id="responseContainer">
@@ -172,8 +172,12 @@
                 });
                 
                 const data = await response.json();
+                const responseCard = document.getElementById('responseCard'); // Get the card element
                 
                 if (response.ok) {
+                    // Show the response card before adding content
+                    responseCard.classList.remove('d-none');
+
                     // Use marked.js to parse markdown
                     const parsedMarkdown = marked.parse(data.response);
                     // Store the successful query for the redo button
@@ -186,7 +190,7 @@
                       <div class="response-actions mt-3 mb-3">
                           <button class="btn btn-sm btn-outline-secondary me-2" id="redoButton" aria-label="Redo response" data-bs-toggle="tooltip" data-bs-placement="top" title="Redo response"><i class="bi bi-arrow-clockwise"></i></button>
                           <button class="btn btn-sm btn-outline-secondary me-2" id="copyButton" aria-label="Copy response" data-bs-toggle="tooltip" data-bs-placement="top" title="Copy response"><i class="bi bi-clipboard"></i></button>
-                          <button class="btn btn-sm btn-outline-primary" id="savePdfButton" aria-label="Save as PDF" data-bs-toggle="tooltip" data-bs-placement="top" title="Save as PDF"><i class="bi bi-file-earmark-pdf"></i></button>
+                          <button class="btn btn-sm btn-outline-secondary" id="savePdfButton" aria-label="Save as PDF" data-bs-toggle="tooltip" data-bs-placement="top" title="Save as PDF"><i class="bi bi-file-earmark-pdf"></i></button>
                       </div>
 
                       <div class="accordion mt-3" id="transparencyAcc">
@@ -252,11 +256,15 @@
                         if (responseContent && responseContent.textContent) {
                             try {
                                 await navigator.clipboard.writeText(responseContent.textContent);
-                                // Provide feedback
-                                const originalText = copyButton.textContent;
-                                copyButton.textContent = 'Copied!';
+
+                                // Provide feedback - store/restore innerHTML
+                                const originalHtml = copyButton.innerHTML;
+                                copyButton.innerHTML = 'Copied!';
+                                copyButton.disabled = true; // Disable briefly
+
                                 setTimeout(() => {
-                                    copyButton.textContent = originalText;
+                                    copyButton.innerHTML = originalHtml; // Restore icon
+                                    copyButton.disabled = false;
                                 }, 1500);
                             } catch (err) {
                                 console.error('Failed to copy text: ', err);
@@ -281,8 +289,8 @@
                             return;
                         }
 
-                        const originalText = saveButton.textContent;
-                        saveButton.textContent = 'Generating...';
+                        const originalHtml = saveButton.innerHTML; // Store original HTML (icon)
+                        saveButton.innerHTML = 'Generating...'; // Show text
                         saveButton.disabled = true;
 
                         html2canvas(responseContent, {
@@ -311,13 +319,13 @@
                             const yPos = 20; // Add some top margin
 
                             pdf.addImage(imgData, 'PNG', xPos, yPos, imgWidth, imgHeight);
-                            pdf.save('oura_analysis.pdf');
+                            pdf.save(`oura_analysis_${new Date().toISOString().slice(0,10)}.pdf`);
 
                         }).catch(err => {
                             console.error("Error generating PDF:", err);
                             alert('Failed to generate PDF.');
                         }).finally(() => {
-                             saveButton.textContent = originalText;
+                             saveButton.innerHTML = originalHtml; // Restore original HTML (icon)
                              saveButton.disabled = false;
                         });
                     });
@@ -329,6 +337,8 @@
                     });
 
                 } else {
+                    // Show the response card even for errors
+                    responseCard.classList.remove('d-none');
                     document.getElementById('responseContainer').innerHTML = `
                         <div class="alert alert-danger">
                             <strong>Error:</strong> ${data.error}<br>
@@ -353,6 +363,10 @@
         // Add listener for the new Clear button
         document.getElementById('clearButton').addEventListener('click', function() {
             document.getElementById('queryInput').value = '';
+            // Hide the response card on clear
+            document.getElementById('responseCard').classList.add('d-none');
+            // Optionally clear the response container too
+            // document.getElementById('responseContainer').innerHTML = '<p class="text-muted">Your insights will appear here...</p>'; 
         });
 
         // Add listener for Enter key in textarea
