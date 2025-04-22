@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oura Ring Insights</title>
+    <title>Oura Analyst</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -75,16 +75,16 @@
 </head>
 <body>
     <div class="container">
-        <h1 class="text-center mb-4">Oura Ring Insights</h1>
+        <h1 class="text-center mb-4">Oura Analyst</h1>
         
         <div class="row">
             <div class="col-md-8 offset-md-2">
                 <div class="card query-card">
                     <div class="card-body">
-                        <h5 class="card-title">Ask about your Oura data</h5>
+                        <h5 class="card-title">Ask about your Oura Ring health data</h5>
                         <form id="queryForm">
                             <div class="mb-3">
-                                <label for="queryInput" class="form-label">Your Question</label>
+                                <label for="queryInput" class="form-label">Your Question:</label>
                                 <textarea class="form-control" id="queryInput" rows="3" placeholder="e.g., How was my sleep last week? or What's my average HRV?"></textarea>
                                 <div class="query-examples">
                                     <p class="text-muted mb-1">Try these examples:</p>
@@ -94,7 +94,7 @@
                                     <span class="example-chip" data-query="What was my readiness score yesterday?">Yesterday's readiness</span>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">Get Insights</button>
+                            <button type="submit" class="btn btn-success">Get Insights</button>
                         </form>
                     </div>
                 </div>
@@ -178,7 +178,7 @@
                               <strong>Date range:</strong> ${data.metadata.dateRange.start}
                               &nbsp;&rarr;&nbsp; ${data.metadata.dateRange.end}<br>
                               <strong>Categories:</strong> ${data.metadata.queryType.join(', ')}
-
+                              <br>
                               <button id="showRawBtn" class="btn btn-outline-secondary btn-sm mt-2">
                                  See full JSON
                               </button>
@@ -221,6 +221,16 @@
             } finally {
                 // Hide loading indicator
                 document.getElementById('loadingIndicator').style.display = 'none';
+            }
+        });
+
+        // Add listener for Enter key in textarea
+        document.getElementById('queryInput').addEventListener('keydown', function(event) {
+            // Check if Enter key was pressed WITH the Meta (Cmd) or Ctrl key
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                // Prevent default behavior (potentially submitting the form natively, though less likely in textarea)
+                event.preventDefault();
+                document.getElementById('queryForm').querySelector('button[type="submit"]').click();
             }
         });
     </script>
