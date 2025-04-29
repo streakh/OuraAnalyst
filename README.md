@@ -46,7 +46,7 @@ OuraAnalyst is a web application that allows you to query your Oura Ring data us
 1. Clone the repository:
    ```
    git clone https://github.com/streakh/OuraAnalyst.git
-   cd ourarag
+   cd OuraAnalyst
    ```
 
 2. Install dependencies:
