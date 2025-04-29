@@ -2,6 +2,18 @@
 
 OuraAnalyst is a web application that allows you to query your Oura Ring data using natural language. It combines the power of the Oura API v2 with ChatGPT to provide personalized insights and recommendations based on your health data.
 
+## Open Source Code Used
+- The dependencies in the package.json file contain all of the open source code that was used. This includes the following:
+  - Langchain JS and @langchain/openai for calling the openAI API and chaining requests
+  - Axios for HTTP requests (specifically for calling Oura API)
+  - body-parser for parsing HTTP requests
+  - dotenv for loading environment variables like API keys and mongoDB auth credentials
+  - express for building the backend server
+  - mongoose for connecting to mongoDB and defining schema
+  - nodemon for automatically restarting node server after changes while developing
+  - Bootstrap for front-end CSS framework styling
+  - Marked.js for parsing markdown text and converting to HTML
+- These were all used in my own ways and no code was borrowed from external sources.
 ## Features
 
 - **Natural Language Queries**: Ask questions about your sleep, activity, and readiness in plain English
