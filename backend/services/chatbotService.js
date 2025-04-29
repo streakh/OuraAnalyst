@@ -92,14 +92,14 @@ async function generateInsight(query) {
       - Activity data (steps, calories, activity levels, etc.)
       - Readiness data (readiness score, HRV balance, recovery index, etc.)
 
-      Please analyze the provided data and give thoughtful, personalized insights and recommendations relevant to the user's query.
+      Please analyze the provided data and give thoughtful, personalized insights and recommendations relevant to the user's query concisely.
       Format the response in a way that is easy to understand using markdown.
       If the data is in minutes, convert it to hours and minutes where appropriate (e.g., 135 minutes -> 2 hours 15 minutes).
       If the user asks for a calculation, provide the result directly unless the underlying data is simple or requested.
       If the user asks about data that's not available for the period, kindly let them know.
       Always be helpful, concise, and focus on actionable advice based on the data.
       Format your response in a clear, readable way using markdown formatting where appropriate.
-      Ensure your response is concise and directly addresses the user's query, while still providing all the necessary information.`
+      Ensure your response is concise and directly addresses the user's query.`
     };
 
     // Context message preparation
