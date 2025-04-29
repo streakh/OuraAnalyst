@@ -40,7 +40,7 @@ async function generateInsight(query) {
     ]);
 
     const { startDate, endDate } = dateResult;
-    const relevantDataTypes = typeResult; // This is already the array, e.g., ['sleep']
+    const relevantDataTypes = typeResult;
 
 
     // Fetch data using ouraService
@@ -74,7 +74,6 @@ async function generateInsight(query) {
     }
 
     // Simplify the data retrieved from DB
-    // simplifyData already expects an object like {sleep: [...], activity: [...], readiness: [...]}
     const simplifiedData = simplifyData(ouraData);
 
 
@@ -142,7 +141,6 @@ async function generateInsight(query) {
   }
 }
 
-// Export the functions
 module.exports = {
   generateInsight,
 };

@@ -79,14 +79,13 @@
         /* Remove borders from action buttons */
         .response-actions .btn {
             border: none;
-            box-shadow: none !important; /* Remove focus shadow */
+            box-shadow: none !important;
         }
         .response-actions .btn:focus {
             box-shadow: none !important;
         }
-        /* Increase icon size in action buttons */
         .response-actions .btn i {
-            font-size: 1.3rem; /* Adjust size as needed */
+            font-size: 1.3rem;
         }
     </style>
 </head>
@@ -368,15 +367,12 @@
             document.getElementById('queryInput').value = '';
             // Hide the response card on clear
             document.getElementById('responseCard').classList.add('d-none');
-            // Optionally clear the response container too
-            // document.getElementById('responseContainer').innerHTML = '<p class="text-muted">Your insights will appear here...</p>'; 
         });
 
         // Add listener for Enter key in textarea
         document.getElementById('queryInput').addEventListener('keydown', function(event) {
             // Check if Enter key was pressed WITH the Meta (Cmd) or Ctrl key
             if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                // Prevent default behavior (potentially submitting the form natively, though less likely in textarea)
                 event.preventDefault();
                 document.getElementById('queryForm').querySelector('button[type="submit"]').click();
             }

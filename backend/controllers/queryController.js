@@ -1,8 +1,6 @@
-// backend/controllers/queryController.js
 const chatbotService = require('../services/chatbotService');
 const ouraService = require('../services/ouraService');
 const dataUpdateService = require('../services/dataUpdateService'); // Import the new service
-// const analyticsService = require('../services/analyticsService'); // Uncomment if I integrate analytics later
 
 
 
@@ -19,17 +17,15 @@ exports.processQuery = async (req, res) => {
     // Log the incoming query
     console.log(`Processing query: "${query}"`);
     
-    // Generate the insight using the chatbot service, passing only the query now
+    // Generate the insight using the chatbot service and extract the response text
     const insightResult = await chatbotService.generateInsight(query);
-
-    // Extract response text
     const responseText = insightResult.response;
     
-    // Return the response with *merged* metadata
+    // Return the response with merged metadata
     res.json({ 
       response: responseText, 
       metadata: {
-        ...insightResult.metadata, // Spread the metadata from the service
+        ...insightResult.metadata,
         // Add the controller-specific metadata
         processedAt: new Date().toISOString(), // Overwrite service processedAt with controller one for consistency
         dataUpdated: wasUpdated, 

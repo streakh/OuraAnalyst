@@ -25,6 +25,6 @@ function getDbUri() {
 
 module.exports = {
   dbURI: getDbUri(),
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY,   // Your OpenAI API key
-  ouraApiKey: process.env.OURA_API_KEY      // Your Oura API key
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  ouraApiKey: process.env.OURA_API_KEY      
 };

@@ -45,11 +45,11 @@ async function ensureRecentData() {
   // If we're here, no update was needed or it was just attempted (successfully or not)
   return {
     updated: updatePerformed,
-    lastUpdateTime: lastUpdateTime, // Return the current state of lastUpdateTime
-    updateInterval: UPDATE_INTERVAL // Return the interval value
+    lastUpdateTime: lastUpdateTime,
+    updateInterval: UPDATE_INTERVAL
   };
 }
 
 module.exports = {
   ensureRecentData
-}; // Export the renamed function
+};
